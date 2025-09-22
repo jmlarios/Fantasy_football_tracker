@@ -1,9 +1,3 @@
-"""
-Fantasy Football Tracker Models
-
-This module contains all the database models for the fantasy football tracker application.
-"""
-
 from datetime import datetime
 from typing import List, Optional
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Boolean, Text
