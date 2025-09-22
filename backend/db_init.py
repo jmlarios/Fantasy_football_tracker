@@ -9,6 +9,7 @@ sys.path.append(str(src_path))
 # Importing necessary modules from config and models
 from config import engine, test_database_connection, SessionLocal
 from src.models import Base, User, Player, FantasyTeam, Match, FantasyLeague
+from sqlalchemy import text
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -42,13 +43,27 @@ def check_existing_data() -> dict:
     """
     db = SessionLocal()
     try:
-        counts = {
-            'users': db.query(User).count(),
-            'players': db.query(Player).count(), 
-            'fantasy_teams': db.query(FantasyTeam).count(),
-            'matches': db.query(Match).count(),
-            'fantasy_leagues': db.query(FantasyLeague).count()
-        }
+        # Check if tables exist first
+        from sqlalchemy import inspect
+        inspector = inspect(engine)
+        existing_tables = inspector.get_table_names()
+        
+        if not existing_tables:
+            logger.info("No tables exist yet - database is empty")
+            return {}
+        
+        counts = {}
+        # Only check tables that actually exist
+        if 'users' in existing_tables:
+            counts['users'] = db.query(User).count()
+        if 'players' in existing_tables:
+            counts['players'] = db.query(Player).count()
+        if 'fantasy_teams' in existing_tables:
+            counts['fantasy_teams'] = db.query(FantasyTeam).count()
+        if 'matches' in existing_tables:
+            counts['matches'] = db.query(Match).count()
+        if 'fantasy_leagues' in existing_tables:
+            counts['fantasy_leagues'] = db.query(FantasyLeague).count()
         
         logger.info("Current database state:")
         for table, count in counts.items():
