@@ -33,7 +33,7 @@ class DatabaseConfig:
 class AppConfig:
     """Application configuration for FastAPI."""
     
-    APP_NAME: str = "Fantasy Football Tracker"
+    APP_NAME: str = "LaLiga Fantasy Football Tracker"
     VERSION: str = "1.0.0"
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     

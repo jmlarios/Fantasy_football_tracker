@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title=app_config.APP_NAME,
     version=app_config.VERSION,
-    description="Fantasy Football Tracker - Track your fantasy team performance!",
+    description="LaLiga Fantasy Football Tracker - Track your LaLiga fantasy team performance!",
     debug=app_config.DEBUG
 )
 
@@ -92,7 +92,7 @@ class AuthResponse(BaseModel):
 async def root():
     """Welcome endpoint."""
     return {
-        "message": "Welcome to Fantasy Football Tracker API!",
+        "message": "Welcome to LaLiga Fantasy Football Tracker API!",
         "version": app_config.VERSION,
         "docs": "/docs"
     }
