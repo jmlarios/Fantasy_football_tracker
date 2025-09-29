@@ -16,6 +16,7 @@ sys.path.append(str(src_path))
 from config import get_db, test_database_connection, app_config
 from src.models import User, Player, FantasyTeam
 from src.services.auth import auth_service
+from src.services.fantasy_team import fantasy_team_service
 from src.middleware.session import (
     get_current_user, 
     require_authentication, 
@@ -77,6 +78,40 @@ class PlayerResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# New fantasy team models
+class FantasyTeamCreate(BaseModel):
+    name: str
+
+class FantasyTeamResponse(BaseModel):
+    id: int
+    name: str
+    total_points: float
+    max_players: int
+    
+    class Config:
+        from_attributes = True
+
+class TeamPlayerResponse(BaseModel):
+    id: int
+    name: str
+    team: str
+    position: str
+    is_captain: bool
+    is_vice_captain: bool
+    position_in_team: str
+
+class FantasyTeamDetailResponse(BaseModel):
+    team: FantasyTeamResponse
+    players: List[TeamPlayerResponse]
+    player_count: int
+
+class AddPlayerRequest(BaseModel):
+    player_id: int
+
+class SetCaptainRequest(BaseModel):
+    player_id: int
+    is_vice: bool = False
 
 class HealthResponse(BaseModel):
     status: str
@@ -246,26 +281,249 @@ async def get_player(player_id: int, db: Session = Depends(get_db)):
         )
     return player
 
-# Database info endpoint (protected)
-@app.get("/database/info")
-async def database_info(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_authentication)
+# Fantasy Team endpoints
+@app.post("/fantasy-teams", response_model=FantasyTeamResponse, status_code=status.HTTP_201_CREATED)
+async def create_fantasy_team(
+    team_data: FantasyTeamCreate,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
 ):
-    """Get database information and table counts."""
+    """Create a new fantasy team."""
     try:
-        info = {
-            "users_count": db.query(User).count(),
-            "players_count": db.query(Player).count(),
-            "fantasy_teams_count": db.query(FantasyTeam).count(),
-            "database_url": "postgresql://fantasy:***@db:5432/tracker"
-        }
-        return info
+        team = fantasy_team_service.create_fantasy_team(
+            db=db,
+            user_id=current_user.id,
+            team_name=team_data.name
+        )
+        return FantasyTeamResponse.model_validate(team)
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except Exception as e:
-        logger.error(f"Error fetching database info: {e}")
+        logger.error(f"Error creating fantasy team: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to fetch database information"
+            detail="Failed to create fantasy team"
+        )
+
+@app.get("/fantasy-teams", response_model=List[FantasyTeamResponse])
+async def get_user_fantasy_teams(
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Get all fantasy teams for the current user."""
+    try:
+        teams = fantasy_team_service.get_user_teams(db=db, user_id=current_user.id)
+        return [FantasyTeamResponse.model_validate(team) for team in teams]
+    except Exception as e:
+        logger.error(f"Error fetching fantasy teams: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch fantasy teams"
+        )
+
+@app.get("/fantasy-teams/{team_id}", response_model=FantasyTeamDetailResponse)
+async def get_fantasy_team_detail(
+    team_id: int,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Get detailed fantasy team information including players."""
+    try:
+        team_data = fantasy_team_service.get_team_with_players(
+            db=db,
+            team_id=team_id,
+            user_id=current_user.id
+        )
+        
+        if not team_data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Fantasy team not found"
+            )
+        
+        return FantasyTeamDetailResponse(
+            team=FantasyTeamResponse.model_validate(team_data['team']),
+            players=[TeamPlayerResponse(**player) for player in team_data['players']],
+            player_count=team_data['player_count']
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching fantasy team detail: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch fantasy team details"
+        )
+
+@app.post("/fantasy-teams/{team_id}/players")
+async def add_player_to_team(
+    team_id: int,
+    player_data: AddPlayerRequest,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Add a player to a fantasy team."""
+    try:
+        fantasy_team_service.add_player_to_team(
+            db=db,
+            team_id=team_id,
+            player_id=player_data.player_id,
+            user_id=current_user.id
+        )
+        return {"message": "Player added to team successfully"}
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error adding player to team: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to add player to team"
+        )
+
+@app.delete("/fantasy-teams/{team_id}/players/{player_id}")
+async def remove_player_from_team(
+    team_id: int,
+    player_id: int,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Remove a player from a fantasy team."""
+    try:
+        fantasy_team_service.remove_player_from_team(
+            db=db,
+            team_id=team_id,
+            player_id=player_id,
+            user_id=current_user.id
+        )
+        return {"message": "Player removed from team successfully"}
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error removing player from team: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to remove player from team"
+        )
+
+@app.post("/fantasy-teams/{team_id}/captain")
+async def set_team_captain(
+    team_id: int,
+    captain_data: SetCaptainRequest,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Set a player as captain or vice-captain."""
+    try:
+        fantasy_team_service.set_captain(
+            db=db,
+            team_id=team_id,
+            player_id=captain_data.player_id,
+            user_id=current_user.id,
+            is_vice=captain_data.is_vice
+        )
+        
+        role = "vice-captain" if captain_data.is_vice else "captain"
+        return {"message": f"Player set as {role} successfully"}
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error setting captain: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to set captain"
+        )
+
+@app.get("/fantasy-teams/{team_id}/validate")
+async def validate_team_formation(
+    team_id: int,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Validate fantasy team formation."""
+    try:
+        # Verify team ownership
+        team = db.query(FantasyTeam).filter(
+            FantasyTeam.id == team_id,
+            FantasyTeam.user_id == current_user.id
+        ).first()
+        
+        if not team:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Fantasy team not found"
+            )
+        
+        validation_result = fantasy_team_service.validate_team_formation(db=db, team_id=team_id)
+        return validation_result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error validating team formation: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to validate team formation"
+        )
+
+# Enhanced player search endpoint
+@app.get("/players/search")
+async def search_players(
+    q: Optional[str] = None,
+    team: Optional[str] = None,
+    position: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    """Search players with filters for team building."""
+    try:
+        query = db.query(Player).filter(Player.is_active == True)
+        
+        if q:
+            query = query.filter(Player.name.ilike(f"%{q}%"))
+        if team:
+            query = query.filter(Player.team == team)
+        if position:
+            query = query.filter(Player.position == position)
+        
+        players = query.offset(skip).limit(limit).all()
+        return players
+        
+    except Exception as e:
+        logger.error(f"Error searching players: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to search players"
+        )
+
+@app.get("/teams")
+async def get_laliga_teams(db: Session = Depends(get_db)):
+    """Get all LaLiga teams for team building."""
+    try:
+        teams = db.query(Player.team).distinct().order_by(Player.team).all()
+        return [{"name": team[0]} for team in teams]
+    except Exception as e:
+        logger.error(f"Error fetching teams: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch teams"
         )
 
 # Run the app
