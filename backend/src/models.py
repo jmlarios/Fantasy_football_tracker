@@ -16,7 +16,9 @@ class User(Base):
 
     id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = Column(String(100), nullable=False)
-    email: Mapped[Optional[str]] = Column(String(255), unique=True, nullable=True)
+    email: Mapped[str] = Column(String(255), unique=True, nullable=False)
+    password_hash: Mapped[str] = Column(String(255), nullable=False)
+    is_active: Mapped[bool] = Column(Boolean, default=True)
     created_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = Column(DateTime(timezone=True), onupdate=func.now())
 
