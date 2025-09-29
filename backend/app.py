@@ -14,7 +14,7 @@ sys.path.append(str(src_path))
 
 # Importing necessary modules
 from config import get_db, test_database_connection, app_config
-from src.models import User, Player, FantasyTeam
+from src.models import User, Player, FantasyTeam, Matchday
 from src.services.auth import auth_service
 from src.services.fantasy_team import fantasy_team_service
 from src.middleware.session import (
@@ -121,6 +121,22 @@ class HealthResponse(BaseModel):
 class AuthResponse(BaseModel):
     message: str
     user: UserResponse
+
+class MatchdayResponse(BaseModel):
+    id: int
+    matchday_number: int
+    season: str
+    start_date: str
+    end_date: str
+    deadline: str
+    is_active: bool
+    is_finished: bool
+    points_calculated: bool
+    is_transfer_locked: bool
+    time_until_deadline: Optional[str]
+    
+    class Config:
+        from_attributes = True
 
 # Root endpoint
 @app.get("/")
@@ -524,6 +540,146 @@ async def get_laliga_teams(db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch teams"
+        )
+
+# Matchday endpoints
+@app.get("/matchdays", response_model=List[MatchdayResponse])
+async def get_all_matchdays(db: Session = Depends(get_db)):
+    """Get all matchdays for the current season."""
+    try:
+        matchdays = db.query(Matchday).order_by(Matchday.matchday_number).all()
+        
+        response_data = []
+        for md in matchdays:
+            response_data.append(MatchdayResponse(
+                id=md.id,
+                matchday_number=md.matchday_number,
+                season=md.season,
+                start_date=md.start_date.isoformat(),
+                end_date=md.end_date.isoformat(),
+                deadline=md.deadline.isoformat(),
+                is_active=md.is_active,
+                is_finished=md.is_finished,
+                points_calculated=md.points_calculated,
+                is_transfer_locked=md.is_transfer_locked,
+                time_until_deadline=md.time_until_deadline
+            ))
+        
+        return response_data
+        
+    except Exception as e:
+        logger.error(f"Error fetching matchdays: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch matchdays"
+        )
+
+@app.get("/matchdays/current", response_model=MatchdayResponse)
+async def get_current_matchday(db: Session = Depends(get_db)):
+    """Get the currently active matchday."""
+    try:
+        current_matchday = db.query(Matchday).filter(Matchday.is_active == True).first()
+        
+        if not current_matchday:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No active matchday found"
+            )
+        
+        return MatchdayResponse(
+            id=current_matchday.id,
+            matchday_number=current_matchday.matchday_number,
+            season=current_matchday.season,
+            start_date=current_matchday.start_date.isoformat(),
+            end_date=current_matchday.end_date.isoformat(),
+            deadline=current_matchday.deadline.isoformat(),
+            is_active=current_matchday.is_active,
+            is_finished=current_matchday.is_finished,
+            points_calculated=current_matchday.points_calculated,
+            is_transfer_locked=current_matchday.is_transfer_locked,
+            time_until_deadline=current_matchday.time_until_deadline
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching current matchday: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch current matchday"
+        )
+
+@app.get("/matchdays/next", response_model=MatchdayResponse)
+async def get_next_matchday(db: Session = Depends(get_db)):
+    """Get the next upcoming matchday."""
+    try:
+        next_matchday = db.query(Matchday).filter(
+            Matchday.is_finished == False,
+            Matchday.is_active == False
+        ).order_by(Matchday.start_date.asc()).first()
+        
+        if not next_matchday:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No upcoming matchday found"
+            )
+        
+        return MatchdayResponse(
+            id=next_matchday.id,
+            matchday_number=next_matchday.matchday_number,
+            season=next_matchday.season,
+            start_date=next_matchday.start_date.isoformat(),
+            end_date=next_matchday.end_date.isoformat(),
+            deadline=next_matchday.deadline.isoformat(),
+            is_active=next_matchday.is_active,
+            is_finished=next_matchday.is_finished,
+            points_calculated=next_matchday.points_calculated,
+            is_transfer_locked=next_matchday.is_transfer_locked,
+            time_until_deadline=next_matchday.time_until_deadline
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching next matchday: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch next matchday"
+        )
+
+@app.get("/matchdays/{matchday_number}", response_model=MatchdayResponse)
+async def get_matchday_by_number(matchday_number: int, db: Session = Depends(get_db)):
+    """Get a specific matchday by number."""
+    try:
+        matchday = db.query(Matchday).filter(Matchday.matchday_number == matchday_number).first()
+        
+        if not matchday:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Matchday {matchday_number} not found"
+            )
+        
+        return MatchdayResponse(
+            id=matchday.id,
+            matchday_number=matchday.matchday_number,
+            season=matchday.season,
+            start_date=matchday.start_date.isoformat(),
+            end_date=matchday.end_date.isoformat(),
+            deadline=matchday.deadline.isoformat(),
+            is_active=matchday.is_active,
+            is_finished=matchday.is_finished,
+            points_calculated=matchday.points_calculated,
+            is_transfer_locked=matchday.is_transfer_locked,
+            time_until_deadline=matchday.time_until_deadline
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching matchday {matchday_number}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch matchday"
         )
 
 # Run the app
