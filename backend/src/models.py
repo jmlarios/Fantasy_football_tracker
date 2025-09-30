@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Boolean, Text
 from sqlalchemy.ext.declarative import declarative_base
@@ -16,7 +16,9 @@ class User(Base):
 
     id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = Column(String(100), nullable=False)
-    email: Mapped[Optional[str]] = Column(String(255), unique=True, nullable=True)
+    email: Mapped[str] = Column(String(255), unique=True, nullable=False)
+    password_hash: Mapped[str] = Column(String(255), nullable=False)
+    is_active: Mapped[bool] = Column(Boolean, default=True)
     created_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -100,8 +102,10 @@ class FantasyTeamPlayer(Base):
     is_captain: Mapped[bool] = Column(Boolean, default=False)
     is_vice_captain: Mapped[bool] = Column(Boolean, default=False)
     
+    # Transfer tracking
     added_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
-
+    added_for_matchday: Mapped[Optional[int]] = Column(Integer, nullable=True)  # Which matchday was this player added for
+    
     # Relationships
     fantasy_team: Mapped["FantasyTeam"] = relationship("FantasyTeam", back_populates="team_players")
     player: Mapped["Player"] = relationship("Player")
@@ -123,6 +127,7 @@ class Match(Base):
     
     # Match details
     matchday: Mapped[int] = Column(Integer, nullable=False)  # Gameweek number
+    matchday_id: Mapped[Optional[int]] = Column(Integer, ForeignKey('matchdays.id'), nullable=True)
     season: Mapped[str] = Column(String(20), nullable=False)  # e.g., "2024-25"
     competition: Mapped[str] = Column(String(100), nullable=False)  # e.g., "Premier League", "Champions League"
     
@@ -135,6 +140,7 @@ class Match(Base):
     updated_at: Mapped[datetime] = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
+    matchday_info: Mapped[Optional["Matchday"]] = relationship("Matchday", back_populates="matches")
     player_stats: Mapped[List["MatchPlayerStats"]] = relationship("MatchPlayerStats", back_populates="match")
     fantasy_points: Mapped[List["FantasyPoints"]] = relationship("FantasyPoints", back_populates="match")
 
@@ -235,3 +241,70 @@ class FantasyLeague(Base):
 
     def __repr__(self):
         return f"<FantasyLeague(id={self.id}, name='{self.name}', participants={self.max_participants})>"
+
+
+class Matchday(Base):
+    """
+    Matchday model representing a complete matchday period with start/end dates.
+    Used for transfer locks and automatic points updates.
+    """
+    __tablename__ = 'matchdays'
+
+    id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
+    matchday_number: Mapped[int] = Column(Integer, nullable=False, unique=True)
+    season: Mapped[str] = Column(String(20), nullable=False)  # e.g., "2024-2025"
+    
+    # Matchday period
+    start_date: Mapped[datetime] = Column(DateTime(timezone=True), nullable=False)
+    end_date: Mapped[datetime] = Column(DateTime(timezone=True), nullable=False)
+    deadline: Mapped[datetime] = Column(DateTime(timezone=True), nullable=False)  # Transfer deadline
+    
+    # Status tracking
+    is_active: Mapped[bool] = Column(Boolean, default=False)  # Currently ongoing
+    is_finished: Mapped[bool] = Column(Boolean, default=False)  # All matches completed
+    points_calculated: Mapped[bool] = Column(Boolean, default=False)  # Points have been processed
+    
+    created_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    matches: Mapped[List["Match"]] = relationship("Match", back_populates="matchday_info")
+
+    def __repr__(self):
+        return f"<Matchday(number={self.matchday_number}, season='{self.season}', active={self.is_active})>"
+
+    @property
+    def is_transfer_locked(self) -> bool:
+        """Check if transfers are locked for this matchday."""
+        now = datetime.now(timezone.utc)
+        # Handle both timezone-aware and naive datetimes
+        deadline = self.deadline
+        if deadline.tzinfo is None:
+            deadline = deadline.replace(tzinfo=timezone.utc)
+        elif now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        return now >= deadline
+
+    @property
+    def time_until_deadline(self) -> Optional[str]:
+        """Get human-readable time until transfer deadline."""
+        if self.is_transfer_locked:
+            return "Transfer deadline passed"
+        
+        now = datetime.now(timezone.utc)
+        deadline = self.deadline
+        
+        # Handle timezone awareness
+        if deadline.tzinfo is None:
+            deadline = deadline.replace(tzinfo=timezone.utc)
+        elif now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        
+        delta = deadline - now
+        
+        if delta.days > 0:
+            return f"{delta.days} days, {delta.seconds // 3600} hours"
+        elif delta.seconds > 3600:
+            return f"{delta.seconds // 3600} hours, {(delta.seconds % 3600) // 60} minutes"
+        else:
+            return f"{delta.seconds // 60} minutes"

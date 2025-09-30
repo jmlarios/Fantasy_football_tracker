@@ -1,9 +1,13 @@
 import os
 from typing import Generator
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 import logging
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -29,7 +33,7 @@ class DatabaseConfig:
 class AppConfig:
     """Application configuration for FastAPI."""
     
-    APP_NAME: str = "Fantasy Football Tracker"
+    APP_NAME: str = "LaLiga Fantasy Football Tracker"
     VERSION: str = "1.0.0"
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     
@@ -74,10 +78,16 @@ def test_database_connection() -> bool:
     Returns True if successful, False otherwise.
     """
     try:
+        logger.info(f"Attempting to connect to: {db_config.DATABASE_URL}")
         with engine.connect() as connection:
-            result = connection.execute("SELECT 1")
+            logger.info("Connection established, executing test query...")
+            result = connection.execute(text("SELECT 1"))
+            logger.info(f"Query result: {result.fetchone()}")
             logger.info("Database connection successful")
             return True
     except Exception as e:
         logger.error(f"Database connection failed: {e}")
+        logger.error(f"Error type: {type(e)}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         return False
