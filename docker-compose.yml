@@ -17,16 +17,16 @@ services:
       POSTGRES_PASSWORD: football
       POSTGRES_DB: tracker
     ports:
-      - "5432:5432"
+      - "5432:5432"  # Added for external access if needed
     volumes:
       - db_data:/var/lib/postgresql/data
 
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
+  # frontend:
+  #   build: ./frontend
+  #   ports:
+  #     - "3000:80"
+  #   depends_on:
+  #     - backend
 
 volumes:
   db_data:
