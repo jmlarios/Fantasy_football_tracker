@@ -29,32 +29,47 @@ const RegisterForm: React.FC = () => {
   };
 
   return (
-    <div style={{ 
-      maxWidth: '400px', 
-      margin: '0 auto', 
-      padding: '2rem',
-      backgroundColor: 'white',
-      borderRadius: '8px',
-      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
-    }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '1.5rem' }}>Create Account</h2>
+    <div>
+      <h2 style={{ 
+        fontSize: '1.8rem',
+        fontWeight: 'bold',
+        marginBottom: '0.5rem',
+        color: '#1f2937'
+      }}>
+        Create Account
+      </h2>
+      <p style={{ 
+        color: '#6b7280', 
+        marginBottom: '2rem',
+        fontSize: '1rem'
+      }}>
+        Join thousands of LaLiga fantasy managers!
+      </p>
       
       <form onSubmit={handleSubmit(onSubmit)}>
         {error && (
           <div style={{ 
-            backgroundColor: '#fee', 
-            color: '#c33', 
+            backgroundColor: '#fef2f2', 
+            color: '#dc2626', 
             padding: '0.75rem', 
-            borderRadius: '4px', 
-            marginBottom: '1rem' 
+            borderRadius: '6px', 
+            marginBottom: '1.5rem',
+            border: '1px solid #fecaca',
+            fontSize: '0.9rem'
           }}>
             {error}
           </div>
         )}
         
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-            Name
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '0.5rem', 
+            fontWeight: '500',
+            color: '#374151',
+            fontSize: '0.95rem'
+          }}>
+            Full Name
           </label>
           <input
             {...register('name', { 
@@ -67,23 +82,38 @@ const RegisterForm: React.FC = () => {
             type="text"
             style={{ 
               width: '100%', 
-              padding: '0.75rem', 
-              border: '1px solid #ddd', 
-              borderRadius: '4px',
-              fontSize: '1rem'
+              padding: '0.875rem', 
+              border: '2px solid #e5e7eb', 
+              borderRadius: '6px',
+              fontSize: '1rem',
+              transition: 'border-color 0.2s ease',
+              outline: 'none'
             }}
             placeholder="Enter your full name"
+            onFocus={(e) => e.target.style.borderColor = '#10b981'}
+            onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
           />
           {errors.name && (
-            <p style={{ color: '#c33', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+            <p style={{ 
+              color: '#dc2626', 
+              fontSize: '0.875rem', 
+              marginTop: '0.5rem',
+              fontWeight: '500'
+            }}>
               {errors.name.message}
             </p>
           )}
         </div>
 
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-            Email
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '0.5rem', 
+            fontWeight: '500',
+            color: '#374151',
+            fontSize: '0.95rem'
+          }}>
+            Email Address
           </label>
           <input
             {...register('email', { 
@@ -96,22 +126,37 @@ const RegisterForm: React.FC = () => {
             type="email"
             style={{ 
               width: '100%', 
-              padding: '0.75rem', 
-              border: '1px solid #ddd', 
-              borderRadius: '4px',
-              fontSize: '1rem'
+              padding: '0.875rem', 
+              border: '2px solid #e5e7eb', 
+              borderRadius: '6px',
+              fontSize: '1rem',
+              transition: 'border-color 0.2s ease',
+              outline: 'none'
             }}
             placeholder="Enter your email"
+            onFocus={(e) => e.target.style.borderColor = '#10b981'}
+            onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
           />
           {errors.email && (
-            <p style={{ color: '#c33', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+            <p style={{ 
+              color: '#dc2626', 
+              fontSize: '0.875rem', 
+              marginTop: '0.5rem',
+              fontWeight: '500'
+            }}>
               {errors.email.message}
             </p>
           )}
         </div>
 
-        <div style={{ marginBottom: '1rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '0.5rem', 
+            fontWeight: '500',
+            color: '#374151',
+            fontSize: '0.95rem'
+          }}>
             Password
           </label>
           <input
@@ -125,22 +170,37 @@ const RegisterForm: React.FC = () => {
             type="password"
             style={{ 
               width: '100%', 
-              padding: '0.75rem', 
-              border: '1px solid #ddd', 
-              borderRadius: '4px',
-              fontSize: '1rem'
+              padding: '0.875rem', 
+              border: '2px solid #e5e7eb', 
+              borderRadius: '6px',
+              fontSize: '1rem',
+              transition: 'border-color 0.2s ease',
+              outline: 'none'
             }}
-            placeholder="Enter your password"
+            placeholder="Choose a strong password"
+            onFocus={(e) => e.target.style.borderColor = '#10b981'}
+            onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
           />
           {errors.password && (
-            <p style={{ color: '#c33', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+            <p style={{ 
+              color: '#dc2626', 
+              fontSize: '0.875rem', 
+              marginTop: '0.5rem',
+              fontWeight: '500'
+            }}>
               {errors.password.message}
             </p>
           )}
         </div>
 
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+        <div style={{ marginBottom: '2rem' }}>
+          <label style={{ 
+            display: 'block', 
+            marginBottom: '0.5rem', 
+            fontWeight: '500',
+            color: '#374151',
+            fontSize: '0.95rem'
+          }}>
             Confirm Password
           </label>
           <input
@@ -151,15 +211,24 @@ const RegisterForm: React.FC = () => {
             type="password"
             style={{ 
               width: '100%', 
-              padding: '0.75rem', 
-              border: '1px solid #ddd', 
-              borderRadius: '4px',
-              fontSize: '1rem'
+              padding: '0.875rem', 
+              border: '2px solid #e5e7eb', 
+              borderRadius: '6px',
+              fontSize: '1rem',
+              transition: 'border-color 0.2s ease',
+              outline: 'none'
             }}
             placeholder="Confirm your password"
+            onFocus={(e) => e.target.style.borderColor = '#10b981'}
+            onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
           />
           {errors.confirmPassword && (
-            <p style={{ color: '#c33', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+            <p style={{ 
+              color: '#dc2626', 
+              fontSize: '0.875rem', 
+              marginTop: '0.5rem',
+              fontWeight: '500'
+            }}>
               {errors.confirmPassword.message}
             </p>
           )}
@@ -170,13 +239,21 @@ const RegisterForm: React.FC = () => {
           disabled={isLoading}
           style={{ 
             width: '100%', 
-            padding: '0.75rem', 
-            backgroundColor: isLoading ? '#ccc' : '#10b981', 
+            padding: '0.875rem', 
+            backgroundColor: isLoading ? '#9ca3af' : '#10b981', 
             color: 'white', 
             border: 'none', 
-            borderRadius: '4px', 
+            borderRadius: '6px', 
             fontSize: '1rem',
-            cursor: isLoading ? 'not-allowed' : 'pointer'
+            fontWeight: '600',
+            cursor: isLoading ? 'not-allowed' : 'pointer',
+            transition: 'background-color 0.2s ease'
+          }}
+          onMouseOver={(e) => {
+            if (!isLoading) e.currentTarget.style.backgroundColor = '#059669';
+          }}
+          onMouseOut={(e) => {
+            if (!isLoading) e.currentTarget.style.backgroundColor = '#10b981';
           }}
         >
           {isLoading ? 'Creating account...' : 'Create Account'}
