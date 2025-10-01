@@ -39,6 +39,7 @@ class Player(Base):
     name: Mapped[str] = Column(String(100), nullable=False)
     team: Mapped[str] = Column(String(100), nullable=False)
     position: Mapped[str] = Column(String(50), nullable=False)  # GK, DEF, MID, FWD
+    price: Mapped[float] = Column(Float, nullable=False)
     
     # Real stats (cumulative for the season)
     goals: Mapped[int] = Column(Integer, default=0)
@@ -71,9 +72,10 @@ class FantasyTeam(Base):
     user_id: Mapped[int] = Column(Integer, ForeignKey('users.id'), nullable=False)
     name: Mapped[str] = Column(String(100), nullable=False)
     total_points: Mapped[float] = Column(Float, default=0.0)
+    total_budget: Mapped[float] = Column(Float, default=100000000.0)
     
     # Team composition (could be extended to support formations)
-    max_players: Mapped[int] = Column(Integer, default=11)  # Standard team size
+    max_players: Mapped[int] = Column(Integer, default=14)  # Standard team size
     
     created_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = Column(DateTime(timezone=True), onupdate=func.now())
@@ -81,9 +83,29 @@ class FantasyTeam(Base):
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="fantasy_teams")
     team_players: Mapped[List["FantasyTeamPlayer"]] = relationship("FantasyTeamPlayer", back_populates="fantasy_team")
+    transfer_history: Mapped[List["TransferHistory"]] = relationship("TransferHistory", back_populates="fantasy_team")
 
     def __repr__(self):
         return f"<FantasyTeam(id={self.id}, name='{self.name}', user_id={self.user_id}, points={self.total_points})>"
+
+    @property
+    def current_budget_used(self) -> float:
+        """Calculate current budget used by team players."""
+        total_cost = 0.0
+        for team_player in self.team_players:
+            if team_player.player:
+                total_cost += team_player.player.price
+        return total_cost
+    
+    @property
+    def remaining_budget(self) -> float:
+        """Calculate remaining budget."""
+        return self.total_budget - self.current_budget_used
+    
+    def can_afford_transfer(self, player_in_price: float, player_out_price: float = 0.0) -> bool:
+        """Check if team can afford a transfer."""
+        net_cost = player_in_price - player_out_price
+        return self.remaining_budget >= net_cost
 
 
 class FantasyTeamPlayer(Base):
@@ -253,6 +275,7 @@ class Matchday(Base):
     id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
     matchday_number: Mapped[int] = Column(Integer, nullable=False, unique=True)
     season: Mapped[str] = Column(String(20), nullable=False)  # e.g., "2024-2025"
+    free_transfers: Mapped[int] = Column(Integer, default=2)
     
     # Matchday period
     start_date: Mapped[datetime] = Column(DateTime(timezone=True), nullable=False)
@@ -308,3 +331,33 @@ class Matchday(Base):
             return f"{delta.seconds // 3600} hours, {(delta.seconds % 3600) // 60} minutes"
         else:
             return f"{delta.seconds // 60} minutes"
+        
+
+class TransferHistory(Base):
+    """
+    Track all player transfers for budget and penalty calculations.
+    """
+    __tablename__ = 'transfer_history'
+
+    id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
+    fantasy_team_id: Mapped[int] = Column(Integer, ForeignKey('fantasy_teams.id'), nullable=False)
+    matchday_id: Mapped[int] = Column(Integer, ForeignKey('matchdays.id'), nullable=False)
+    
+    # Transfer details
+    player_in_id: Mapped[Optional[int]] = Column(Integer, ForeignKey('players.id'), nullable=True)  # Player bought
+    player_out_id: Mapped[Optional[int]] = Column(Integer, ForeignKey('players.id'), nullable=True)  # Player sold
+    transfer_cost: Mapped[float] = Column(Float, default=0.0)  # Net cost of transfer
+    penalty_points: Mapped[float] = Column(Float, default=0.0)  # Points deducted for extra transfers
+    is_free_transfer: Mapped[bool] = Column(Boolean, default=True)
+    
+    # Tracking
+    created_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    fantasy_team: Mapped["FantasyTeam"] = relationship("FantasyTeam")
+    matchday: Mapped["Matchday"] = relationship("Matchday")
+    player_in: Mapped[Optional["Player"]] = relationship("Player", foreign_keys=[player_in_id])
+    player_out: Mapped[Optional["Player"]] = relationship("Player", foreign_keys=[player_out_id])
+
+    def __repr__(self):
+        return f"<TransferHistory(team_id={self.fantasy_team_id}, matchday={self.matchday_id})>"
