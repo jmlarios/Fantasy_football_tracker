@@ -23,47 +23,32 @@ const LoginForm: React.FC = () => {
   };
 
   return (
-    <div>
-      <h2 style={{ 
-        fontSize: '1.8rem',
-        fontWeight: 'bold',
-        marginBottom: '0.5rem',
-        color: '#1f2937'
-      }}>
-        Sign In
-      </h2>
-      <p style={{ 
-        color: '#6b7280', 
-        marginBottom: '2rem',
-        fontSize: '1rem'
-      }}>
-        Welcome back! Please sign in to your account.
-      </p>
+    <div style={{ 
+      maxWidth: '400px', 
+      margin: '0 auto', 
+      padding: '2rem',
+      backgroundColor: 'white',
+      borderRadius: '8px',
+      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+    }}>
+      <h2 style={{ textAlign: 'center', marginBottom: '1.5rem' }}>Sign In</h2>
       
       <form onSubmit={handleSubmit(onSubmit)}>
         {error && (
           <div style={{ 
-            backgroundColor: '#fef2f2', 
-            color: '#dc2626', 
+            backgroundColor: '#fee', 
+            color: '#c33', 
             padding: '0.75rem', 
-            borderRadius: '6px', 
-            marginBottom: '1.5rem',
-            border: '1px solid #fecaca',
-            fontSize: '0.9rem'
+            borderRadius: '4px', 
+            marginBottom: '1rem' 
           }}>
             {error}
           </div>
         )}
         
-        <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ 
-            display: 'block', 
-            marginBottom: '0.5rem', 
-            fontWeight: '500',
-            color: '#374151',
-            fontSize: '0.95rem'
-          }}>
-            Email Address
+        <div style={{ marginBottom: '1rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+            Email
           </label>
           <input
             {...register('email', { 
@@ -76,37 +61,22 @@ const LoginForm: React.FC = () => {
             type="email"
             style={{ 
               width: '100%', 
-              padding: '0.875rem', 
-              border: '2px solid #e5e7eb', 
-              borderRadius: '6px',
-              fontSize: '1rem',
-              transition: 'border-color 0.2s ease',
-              outline: 'none'
+              padding: '0.75rem', 
+              border: '1px solid #ddd', 
+              borderRadius: '4px',
+              fontSize: '1rem'
             }}
             placeholder="Enter your email"
-            onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-            onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
           />
           {errors.email && (
-            <p style={{ 
-              color: '#dc2626', 
-              fontSize: '0.875rem', 
-              marginTop: '0.5rem',
-              fontWeight: '500'
-            }}>
+            <p style={{ color: '#c33', fontSize: '0.875rem', marginTop: '0.25rem' }}>
               {errors.email.message}
             </p>
           )}
         </div>
 
-        <div style={{ marginBottom: '2rem' }}>
-          <label style={{ 
-            display: 'block', 
-            marginBottom: '0.5rem', 
-            fontWeight: '500',
-            color: '#374151',
-            fontSize: '0.95rem'
-          }}>
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
             Password
           </label>
           <input
@@ -114,24 +84,15 @@ const LoginForm: React.FC = () => {
             type="password"
             style={{ 
               width: '100%', 
-              padding: '0.875rem', 
-              border: '2px solid #e5e7eb', 
-              borderRadius: '6px',
-              fontSize: '1rem',
-              transition: 'border-color 0.2s ease',
-              outline: 'none'
+              padding: '0.75rem', 
+              border: '1px solid #ddd', 
+              borderRadius: '4px',
+              fontSize: '1rem'
             }}
             placeholder="Enter your password"
-            onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-            onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
           />
           {errors.password && (
-            <p style={{ 
-              color: '#dc2626', 
-              fontSize: '0.875rem', 
-              marginTop: '0.5rem',
-              fontWeight: '500'
-            }}>
+            <p style={{ color: '#c33', fontSize: '0.875rem', marginTop: '0.25rem' }}>
               {errors.password.message}
             </p>
           )}
@@ -142,21 +103,13 @@ const LoginForm: React.FC = () => {
           disabled={isLoading}
           style={{ 
             width: '100%', 
-            padding: '0.875rem', 
-            backgroundColor: isLoading ? '#9ca3af' : '#3b82f6', 
+            padding: '0.75rem', 
+            backgroundColor: isLoading ? '#ccc' : '#3b82f6', 
             color: 'white', 
             border: 'none', 
-            borderRadius: '6px', 
+            borderRadius: '4px', 
             fontSize: '1rem',
-            fontWeight: '600',
-            cursor: isLoading ? 'not-allowed' : 'pointer',
-            transition: 'background-color 0.2s ease'
-          }}
-          onMouseOver={(e) => {
-            if (!isLoading) e.currentTarget.style.backgroundColor = '#2563eb';
-          }}
-          onMouseOut={(e) => {
-            if (!isLoading) e.currentTarget.style.backgroundColor = '#3b82f6';
+            cursor: isLoading ? 'not-allowed' : 'pointer'
           }}
         >
           {isLoading ? 'Signing in...' : 'Sign In'}
