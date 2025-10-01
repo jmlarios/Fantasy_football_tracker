@@ -1,6 +1,6 @@
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -17,6 +17,7 @@ from config import get_db, test_database_connection, app_config
 from src.models import User, Player, FantasyTeam, Matchday
 from src.services.auth import auth_service
 from src.services.fantasy_team import fantasy_team_service
+from src.services.transfer_service import transfer_service
 from src.middleware.session import (
     get_current_user, 
     require_authentication, 
@@ -137,6 +138,29 @@ class MatchdayResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# Transfer-related Pydantic models
+class TransferRequest(BaseModel):
+    player_in_id: Optional[int] = None  # Player to buy
+    player_out_id: Optional[int] = None  # Player to sell
+
+class TransferValidationResponse(BaseModel):
+    is_valid: bool
+    errors: List[str]
+    warnings: List[str]
+    cost_breakdown: Dict
+
+class TransferStatusResponse(BaseModel):
+    team_id: int
+    matchday_number: int
+    total_budget: float
+    budget_used: float
+    remaining_budget: float
+    free_transfers_available: int
+    transfers_made_this_matchday: int
+    penalty_per_extra_transfer: float
+    transfer_deadline: str
+    transfers_locked: bool
 
 # Root endpoint
 @app.get("/")
@@ -680,6 +704,103 @@ async def get_matchday_by_number(matchday_number: int, db: Session = Depends(get
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to fetch matchday"
+        )
+
+# Transfer endpoints
+@app.get("/fantasy-teams/{team_id}/transfer-status", response_model=TransferStatusResponse)
+async def get_transfer_status(
+    team_id: int,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Get transfer status and budget information for a team."""
+    try:
+        status = transfer_service.get_transfer_status(db, team_id, current_user.id)
+        return TransferStatusResponse(**status)
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error getting transfer status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get transfer status"
+        )
+
+@app.post("/fantasy-teams/{team_id}/validate-transfer", response_model=TransferValidationResponse)
+async def validate_transfer(
+    team_id: int,
+    transfer_data: TransferRequest,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Validate a proposed transfer without executing it."""
+    try:
+        validation = transfer_service.validate_transfer(
+            db, team_id, transfer_data.player_in_id, 
+            transfer_data.player_out_id, current_user.id
+        )
+        return TransferValidationResponse(**validation)
+        
+    except Exception as e:
+        logger.error(f"Error validating transfer: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to validate transfer"
+        )
+
+@app.post("/fantasy-teams/{team_id}/execute-transfer")
+async def execute_transfer(
+    team_id: int,
+    transfer_data: TransferRequest,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Execute a player transfer."""
+    try:
+        result = transfer_service.execute_transfer(
+            db, team_id, transfer_data.player_in_id, 
+            transfer_data.player_out_id, current_user.id
+        )
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error executing transfer: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to execute transfer"
+        )
+
+@app.get("/fantasy-teams/{team_id}/transfer-history")
+async def get_transfer_history(
+    team_id: int,
+    limit: int = 50,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Get transfer history for a team."""
+    try:
+        history = transfer_service.get_transfer_history(db, team_id, current_user.id, limit)
+        return {"transfers": history}
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error getting transfer history: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get transfer history"
         )
 
 # Run the app
