@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-ro
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginForm from './components/auth/LoginForm';
 import RegisterForm from './components/auth/RegisterForm';
+import FantasyTeamsList from './components/fantasy/FantasyTeamsList';
+import TeamDetailPage from './components/fantasy/TeamDetailPage';
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
@@ -315,37 +317,52 @@ const Dashboard: React.FC = () => {
           gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
           gap: '2rem'
         }}>
-          <div style={{ 
-            backgroundColor: 'white', 
-            padding: '2rem', 
-            borderRadius: '12px', 
-            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.07)',
-            border: '1px solid #e5e7eb'
-          }}>
-            <h3 style={{ 
-              fontSize: '1.3rem',
-              fontWeight: '600',
-              marginBottom: '1rem',
-              color: '#1f2937'
-            }}>
-              🏆 My Fantasy Teams
-            </h3>
-            <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
-              Create and manage your LaLiga fantasy teams
-            </p>
-            <button style={{
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '6px',
-              fontSize: '1rem',
-              fontWeight: '500',
+          <Link 
+            to="/fantasy-teams"
+            style={{ textDecoration: 'none', color: 'inherit' }}
+          >
+            <div style={{ 
+              backgroundColor: 'white', 
+              padding: '2rem', 
+              borderRadius: '12px', 
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.07)',
+              border: '1px solid #e5e7eb',
+              transition: 'all 0.2s ease',
               cursor: 'pointer'
-            }}>
-              View Teams
-            </button>
-          </div>
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 8px 25px rgba(0, 0, 0, 0.15)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.07)';
+            }}
+            >
+              <h3 style={{ 
+                fontSize: '1.3rem',
+                fontWeight: '600',
+                marginBottom: '1rem',
+                color: '#1f2937'
+              }}>
+                🏆 My Fantasy Teams
+              </h3>
+              <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
+                Create and manage your LaLiga fantasy teams
+              </p>
+              <div style={{
+                backgroundColor: '#3b82f6',
+                color: 'white',
+                padding: '0.75rem 1.5rem',
+                borderRadius: '6px',
+                fontSize: '1rem',
+                fontWeight: '500',
+                textAlign: 'center'
+              }}>
+                Manage Teams
+              </div>
+            </div>
+          </Link>
 
           <div style={{ 
             backgroundColor: 'white', 
@@ -373,7 +390,8 @@ const Dashboard: React.FC = () => {
               borderRadius: '6px',
               fontSize: '1rem',
               fontWeight: '500',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              width: '100%'
             }}>
               Browse Players
             </button>
@@ -405,7 +423,8 @@ const Dashboard: React.FC = () => {
               borderRadius: '6px',
               fontSize: '1rem',
               fontWeight: '500',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              width: '100%'
             }}>
               View Stats
             </button>
@@ -644,6 +663,14 @@ const AppContent: React.FC = () => {
       <Route 
         path="/dashboard" 
         element={user ? <Dashboard /> : <Navigate to="/login" />} 
+      />
+      <Route 
+        path="/fantasy-teams" 
+        element={user ? <FantasyTeamsList /> : <Navigate to="/login" />} 
+      />
+      <Route 
+        path="/fantasy-teams/:teamId" 
+        element={user ? <TeamDetailPage /> : <Navigate to="/login" />} 
       />
     </Routes>
   );
