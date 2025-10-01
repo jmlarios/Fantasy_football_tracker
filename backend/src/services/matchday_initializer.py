@@ -98,7 +98,7 @@ class MatchdayInitializer:
                 
                 matchday_periods.append({
                     'matchday_number': matchday_num,
-                    'season': '2024-2025',
+                    'season': '2024-2025',  # Fixed: Changed from 2025-2026 to 2024-2025
                     'start_date': start_date,
                     'end_date': end_date,
                     'deadline': deadline,
@@ -333,7 +333,7 @@ def initialize_laliga_matchdays(csv_data: str) -> Dict:
                 # Check if matchday exists
                 existing_matchday = db.query(Matchday).filter(
                     Matchday.matchday_number == matchday_num,
-                    Matchday.season == "2024-2025"
+                    Matchday.season == "2024-2025"  # Fixed: Changed from 2025-2026 to 2024-2025
                 ).first()
                 
                 if existing_matchday:
@@ -346,7 +346,7 @@ def initialize_laliga_matchdays(csv_data: str) -> Dict:
                     # Create new matchday
                     matchday = Matchday(
                         matchday_number=matchday_num,
-                        season="2024-2025",
+                        season="2024-2025",  # Fixed: Changed from 2025-2026 to 2024-2025
                         start_date=start_date,
                         end_date=end_date,
                         deadline=deadline,
