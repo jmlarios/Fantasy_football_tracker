@@ -521,3 +521,4 @@ if __name__ == "__main__":
         print(f"{position}: {points['total']} points")
         print(f"Breakdown: {points}")
         print()
+        

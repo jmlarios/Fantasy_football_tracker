@@ -69,4 +69,47 @@ export const fantasyAPI = {
     api.get('/teams').then(res => res.data),
 };
 
+export const leagueAPI = {
+  // Create a new league
+  createLeague: (data: {
+    name: string;
+    description?: string;
+    is_private: boolean;
+    max_participants: number;
+  }) =>
+    api.post('/leagues', data).then(res => res.data),
+  
+  // Get user's leagues
+  getUserLeagues: () =>
+    api.get('/leagues').then(res => res.data),
+  
+  // Get public leagues
+  getPublicLeagues: (skip = 0, limit = 20) =>
+    api.get(`/leagues/public?skip=${skip}&limit=${limit}`).then(res => res.data),
+  
+  // Join league by code
+  joinLeagueByCode: (joinCode: string) =>
+    api.post('/leagues/join', { join_code: joinCode }).then(res => res.data),
+  
+  // Join league by ID (public leagues)
+  joinLeagueById: (leagueId: number) =>
+    api.post(`/leagues/${leagueId}/join`).then(res => res.data),
+  
+  // Leave league
+  leaveLeague: (leagueId: number) =>
+    api.delete(`/leagues/${leagueId}/leave`).then(res => res.data),
+  
+  // Get league leaderboard
+  getLeagueLeaderboard: (leagueId: number) =>
+    api.get(`/leagues/${leagueId}/leaderboard`).then(res => res.data),
+  
+  // Update league (creator only)
+  updateLeague: (leagueId: number, data: {
+    name?: string;
+    description?: string;
+    max_participants?: number;
+  }) =>
+    api.put(`/leagues/${leagueId}`, data).then(res => res.data),
+};
+
 export default api;
