@@ -24,6 +24,8 @@ class User(Base):
 
     # Relationships
     fantasy_teams: Mapped[List["FantasyTeam"]] = relationship("FantasyTeam", back_populates="user")
+    created_leagues: Mapped[List["FantasyLeague"]] = relationship("FantasyLeague", back_populates="creator")
+    league_participations: Mapped[List["FantasyLeagueParticipant"]] = relationship("FantasyLeagueParticipant", back_populates="user")
 
     def __repr__(self):
         return f"<User(id={self.id}, name='{self.name}', email='{self.email}')>"
@@ -84,6 +86,7 @@ class FantasyTeam(Base):
     user: Mapped["User"] = relationship("User", back_populates="fantasy_teams")
     team_players: Mapped[List["FantasyTeamPlayer"]] = relationship("FantasyTeamPlayer", back_populates="fantasy_team")
     transfer_history: Mapped[List["TransferHistory"]] = relationship("TransferHistory", back_populates="fantasy_team")
+    league_participations: Mapped[List["FantasyLeagueParticipant"]] = relationship("FantasyLeagueParticipant", back_populates="fantasy_team")
 
     def __repr__(self):
         return f"<FantasyTeam(id={self.id}, name='{self.name}', user_id={self.user_id}, points={self.total_points})>"
@@ -243,7 +246,6 @@ class FantasyPoints(Base):
 class FantasyLeague(Base):
     """
     Fantasy league model for organizing competitions between users.
-    Optional: for future expansion to support leagues/competitions.
     """
     __tablename__ = 'fantasy_leagues'
 
@@ -255,14 +257,42 @@ class FantasyLeague(Base):
     
     # League settings
     max_participants: Mapped[int] = Column(Integer, default=20)
+    creator_id: Mapped[int] = Column(Integer, ForeignKey('users.id'), nullable=False)
     start_date: Mapped[datetime] = Column(DateTime(timezone=True), nullable=False)
     end_date: Mapped[Optional[datetime]] = Column(DateTime(timezone=True), nullable=True)
     
     created_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = Column(DateTime(timezone=True), onupdate=func.now())
 
+    # Relationships
+    creator: Mapped["User"] = relationship("User", back_populates="created_leagues")
+    participants: Mapped[List["FantasyLeagueParticipant"]] = relationship("FantasyLeagueParticipant", back_populates="league")
+
     def __repr__(self):
         return f"<FantasyLeague(id={self.id}, name='{self.name}', participants={self.max_participants})>"
+
+
+class FantasyLeagueParticipant(Base):
+    """
+    Association table for league participants.
+    """
+    __tablename__ = 'fantasy_league_participants'
+
+    id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
+    league_id: Mapped[int] = Column(Integer, ForeignKey('fantasy_leagues.id'), nullable=False)
+    user_id: Mapped[int] = Column(Integer, ForeignKey('users.id'), nullable=False)
+    fantasy_team_id: Mapped[int] = Column(Integer, ForeignKey('fantasy_teams.id'), nullable=False)
+    
+    # Participant tracking
+    joined_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    league: Mapped["FantasyLeague"] = relationship("FantasyLeague", back_populates="participants")
+    user: Mapped["User"] = relationship("User", back_populates="league_participations")
+    fantasy_team: Mapped["FantasyTeam"] = relationship("FantasyTeam", back_populates="league_participations")
+
+    def __repr__(self):
+        return f"<FantasyLeagueParticipant(league_id={self.league_id}, user_id={self.user_id})>"
 
 
 class Matchday(Base):
