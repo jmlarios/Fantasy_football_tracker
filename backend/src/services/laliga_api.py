@@ -297,51 +297,43 @@ def test_laliga_api():
     """Test the LaLiga API connection and data fetching."""
     logger.info("Testing LaLiga API connection...")
     
-    try:
-        # Test getting teams
-        logger.info("Testing LaLiga teams endpoint...")
-        teams = laliga_api.get_laliga_teams()
+try:
+    # Test getting teams
+    logger.info("Testing LaLiga teams endpoint...")
+    teams = laliga_api.get_laliga_teams()
+    
+    if teams:
+        logger.info(f"Successfully fetched {len(teams)} LaLiga teams")
+        logger.info(f"Sample team: {teams[0] if teams else 'None'}")
         
+        # Test getting players for first team
         if teams:
-            logger.info(f"Successfully fetched {len(teams)} LaLiga teams")
-            logger.info(f"Sample team: {teams[0] if teams else 'None'}")
+            first_team = teams[0]['name']
+            logger.info(f"Testing players for {first_team}...")
+            players = laliga_api.get_team_players(first_team)
             
-            # Test getting players for first team
-            if teams:
-                first_team = teams[0]['name']
-                logger.info(f"Testing players for {first_team}...")
-                players = laliga_api.get_team_players(first_team)
-                
-                if players:
-                    logger.info(f"Successfully fetched {len(players)} players for {first_team}")
-                    logger.info(f"Sample player: {players[0] if players else 'None'}")
-                else:
-                    logger.warning(f"No players found for {first_team}")
-        
-        # Test fixtures
-        logger.info("Testing LaLiga fixtures...")
-        fixtures = laliga_api.get_season_fixtures()
-        
-        if fixtures:
-            logger.info(f"Successfully fetched {len(fixtures)} fixtures")
-        else:
-            logger.warning("No fixtures found")
-        
-        # Test league table
-        logger.info("Testing LaLiga table...")
-        table = laliga_api.get_league_table()
-        
-        if table:
-            logger.info(f"Successfully fetched league table with {len(table)} teams")
-        else:
-            logger.warning("No league table found")
-        
-        return True
-            
-    except Exception as e:
-        logger.error(f"LaLiga API test failed: {e}")
-        return False
-
-
-if __name__ == "__main__":
-    test_laliga_api()
+            if players:
+                logger.info(f"Successfully fetched {len(players)} players for {first_team}")
+                logger.info(f"Sample player: {players[0] if players else 'None'}")
+            else:
+                logger.warning(f"No players found for {first_team}")
+    
+    # Test fixtures
+    logger.info("Testing LaLiga fixtures...")
+    fixtures = laliga_api.get_season_fixtures()
+    
+    if fixtures:
+        logger.info(f"Successfully fetched {len(fixtures)} fixtures")
+    else:
+        logger.warning("No fixtures found")
+    
+    # Test league table
+    logger.info("Testing LaLiga table...")
+    table = laliga_api.get_league_table()
+    
+    if table:
+        logger.info(f"Successfully fetched league table with {len(table)} teams")
+    else:
+        logger.warning("No league table found")
+except Exception as e:
+    logger.error(f"An error occurred during LaLiga API testing: {e}")
