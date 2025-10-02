@@ -1,8 +1,106 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { fantasyAPI } from '../../services/api';
 import { FantasyTeam } from '../../types/fantasy';
 import CreateTeamModal from './CreateTeamModal';
+
+const Header: React.FC = () => {
+  const { logout } = useAuth();
+
+  return (
+    <header style={{ 
+      backgroundColor: '#1f2937', 
+      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)', 
+      padding: '1rem 3rem' 
+    }}>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        maxWidth: '1400px',
+        margin: '0 auto'
+      }}>
+        <Link 
+          to="/dashboard" 
+          style={{ 
+            color: 'white', 
+            textDecoration: 'none',
+            fontSize: '1.5rem',
+            fontWeight: 'bold'
+          }}
+        >
+          ⚽ LaLiga Fantasy Tracker
+        </Link>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+            <Link 
+              to="/dashboard" 
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none',
+                padding: '0.5rem 1rem',
+                borderRadius: '6px',
+                fontWeight: 'bold',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              Dashboard
+            </Link>
+            <Link 
+              to="/fantasy-teams" 
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none',
+                padding: '0.5rem 1rem',
+                borderRadius: '6px',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                fontWeight: 'bold',
+                transition: 'background-color 0.2s'
+              }}
+            >
+              My Teams
+            </Link>
+            <Link 
+              to="/leagues" 
+              style={{ 
+                color: 'white', 
+                textDecoration: 'none',
+                padding: '0.5rem 1rem',
+                borderRadius: '6px',
+                fontWeight: 'bold',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              My Leagues
+            </Link>
+          </div>
+          
+          <button
+            onClick={logout}
+            style={{ 
+              backgroundColor: '#ef4444', 
+              color: 'white', 
+              border: 'none', 
+              padding: '0.75rem 1.5rem', 
+              borderRadius: '6px', 
+              cursor: 'pointer',
+              fontSize: '1rem',
+              fontWeight: 'bold'
+            }}
+          >
+            Logout
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+};
 
 const FantasyTeamsList: React.FC = () => {
   const [teams, setTeams] = useState<FantasyTeam[]>([]);
@@ -50,47 +148,7 @@ const FantasyTeamsList: React.FC = () => {
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-      {/* Header */}
-      <header style={{ 
-        backgroundColor: '#1f2937', 
-        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)', 
-        padding: '1rem 3rem' 
-      }}>
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          maxWidth: '1400px',
-          margin: '0 auto'
-        }}>
-          <Link 
-            to="/dashboard" 
-            style={{ 
-              color: 'white', 
-              textDecoration: 'none',
-              fontSize: '1.5rem',
-              fontWeight: 'bold'
-            }}
-          >
-            ⚽ LaLiga Fantasy Tracker
-          </Link>
-          
-          <Link 
-            to="/dashboard"
-            style={{ 
-              color: 'white', 
-              textDecoration: 'none', 
-              padding: '0.75rem 1.5rem',
-              border: '2px solid white',
-              borderRadius: '6px',
-              fontSize: '1rem',
-              fontWeight: '500'
-            }}
-          >
-            ← Back to Dashboard
-          </Link>
-        </div>
-      </header>
+      <Header />
 
       {/* Content */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
