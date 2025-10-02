@@ -5,6 +5,7 @@ import LoginForm from './components/auth/LoginForm';
 import RegisterForm from './components/auth/RegisterForm';
 import FantasyTeamsList from './components/fantasy/FantasyTeamsList';
 import TeamDetailPage from './components/fantasy/TeamDetailPage';
+import MyFantasyLeagues from './components/MyFantasyLeagues';
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
@@ -36,7 +37,54 @@ const Header: React.FC = () => {
         
         {user ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-            <span style={{ color: 'white' }}>Welcome, {user.name}!</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+              <Link 
+                to="/dashboard" 
+                style={{ 
+                  color: 'white', 
+                  textDecoration: 'none',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '6px',
+                  fontWeight: 'bold',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                Dashboard
+              </Link>
+              <Link 
+                to="/fantasy-teams" 
+                style={{ 
+                  color: 'white', 
+                  textDecoration: 'none',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '6px',
+                  fontWeight: 'bold',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                My Teams
+              </Link>
+              <Link 
+                to="/leagues" 
+                style={{ 
+                  color: 'white', 
+                  textDecoration: 'none',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '6px',
+                  fontWeight: 'bold',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                My Leagues
+              </Link>
+            </div>
+            
             <button
               onClick={logout}
               style={{ 
@@ -47,7 +95,7 @@ const Header: React.FC = () => {
                 borderRadius: '6px', 
                 cursor: 'pointer',
                 fontSize: '1rem',
-                fontWeight: '500'
+                fontWeight: 'bold'
               }}
             >
               Logout
@@ -64,7 +112,7 @@ const Header: React.FC = () => {
                 border: '2px solid white',
                 borderRadius: '6px',
                 fontSize: '1rem',
-                fontWeight: '500',
+                fontWeight: 'bold',
                 transition: 'all 0.3s ease'
               }}
             >
@@ -79,7 +127,7 @@ const Header: React.FC = () => {
                 padding: '0.75rem 1.5rem', 
                 borderRadius: '6px',
                 fontSize: '1rem',
-                fontWeight: '500',
+                fontWeight: 'bold',
                 transition: 'all 0.3s ease'
               }}
             >
@@ -302,13 +350,13 @@ const Dashboard: React.FC = () => {
             color: '#1f2937',
             marginBottom: '1rem'
           }}>
-            Welcome back, {user?.name}! 👋
+            Welcome back! 👋
           </h1>
           <p style={{ 
             fontSize: '1.2rem',
             color: '#6b7280'
           }}>
-            Ready to manage your LaLiga fantasy team?
+            Ready to manage your LaLiga fantasy experience?
           </p>
         </div>
         
@@ -364,6 +412,53 @@ const Dashboard: React.FC = () => {
             </div>
           </Link>
 
+          <Link 
+            to="/leagues"
+            style={{ textDecoration: 'none', color: 'inherit' }}
+          >
+            <div style={{ 
+              backgroundColor: 'white', 
+              padding: '2rem', 
+              borderRadius: '12px', 
+              boxShadow: '0 4px 6px rgba(0, 0, 0, 0.07)',
+              border: '1px solid #e5e7eb',
+              transition: 'all 0.2s ease',
+              cursor: 'pointer'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 8px 25px rgba(0, 0, 0, 0.15)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.07)';
+            }}
+            >
+              <h3 style={{ 
+                fontSize: '1.3rem',
+                fontWeight: '600',
+                marginBottom: '1rem',
+                color: '#1f2937'
+              }}>
+                🏅 My Fantasy Leagues
+              </h3>
+              <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
+                Create private leagues and compete with friends
+              </p>
+              <div style={{
+                backgroundColor: '#10b981',
+                color: 'white',
+                padding: '0.75rem 1.5rem',
+                borderRadius: '6px',
+                fontSize: '1rem',
+                fontWeight: '500',
+                textAlign: 'center'
+              }}>
+                Manage Leagues
+              </div>
+            </div>
+          </Link>
+
           <div style={{ 
             backgroundColor: 'white', 
             padding: '2rem', 
@@ -383,39 +478,6 @@ const Dashboard: React.FC = () => {
               Browse and analyze LaLiga players
             </p>
             <button style={{
-              backgroundColor: '#10b981',
-              color: 'white',
-              border: 'none',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '6px',
-              fontSize: '1rem',
-              fontWeight: '500',
-              cursor: 'pointer',
-              width: '100%'
-            }}>
-              Browse Players
-            </button>
-          </div>
-
-          <div style={{ 
-            backgroundColor: 'white', 
-            padding: '2rem', 
-            borderRadius: '12px', 
-            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.07)',
-            border: '1px solid #e5e7eb'
-          }}>
-            <h3 style={{ 
-              fontSize: '1.3rem',
-              fontWeight: '600',
-              marginBottom: '1rem',
-              color: '#1f2937'
-            }}>
-              📊 Statistics
-            </h3>
-            <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
-              Track your team's performance
-            </p>
-            <button style={{
               backgroundColor: '#8b5cf6',
               color: 'white',
               border: 'none',
@@ -426,7 +488,7 @@ const Dashboard: React.FC = () => {
               cursor: 'pointer',
               width: '100%'
             }}>
-              View Stats
+              Browse Players
             </button>
           </div>
         </div>
@@ -671,6 +733,10 @@ const AppContent: React.FC = () => {
       <Route 
         path="/fantasy-teams/:teamId" 
         element={user ? <TeamDetailPage /> : <Navigate to="/login" />} 
+      />
+      <Route 
+        path="/leagues" 
+        element={user ? <MyFantasyLeagues /> : <Navigate to="/login" />} 
       />
     </Routes>
   );
