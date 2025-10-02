@@ -15,9 +15,10 @@ sys.path.append(str(src_path))
 
 # Importing necessary modules
 from config import get_db, test_database_connection, app_config
-from src.models import User, Player, FantasyTeam, FantasyTeamPlayer, Matchday
+from src.models import User, Player, FantasyTeam, FantasyTeamPlayer, Matchday, FantasyLeagueParticipant
 from src.services.auth import auth_service
 from src.services import transfer_service
+from src.services.league_service import league_service
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -161,6 +162,52 @@ class TransferStatusResponse(BaseModel):
 class TransferValidationResponse(BaseModel):
     valid: bool
     message: str
+
+class LeagueCreateRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    is_private: bool = False
+    max_participants: int = 20
+
+class LeagueJoinRequest(BaseModel):
+    join_code: str
+
+class LeagueUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    max_participants: Optional[int] = None
+
+class LeagueResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    is_private: bool
+    is_creator: bool
+    participants: int
+    max_participants: int
+    created_at: str
+    join_code: Optional[str] = None
+
+class LeagueJoinResponse(BaseModel):
+    league_id: int
+    league_name: str
+    team_id: int
+    team_name: str
+    participants: int
+
+class LeaderboardEntry(BaseModel):
+    user_id: int
+    user_name: str
+    team_id: int
+    team_name: str
+    total_points: float
+    rank: int
+    is_current_user: bool
+
+class LeaderboardResponse(BaseModel):
+    league: Dict
+    leaderboard: List[LeaderboardEntry]
+    user_rank: Optional[int]
 
 # Basic fantasy team service
 class BasicFantasyTeamService:
@@ -833,6 +880,190 @@ async def get_transfer_history(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to get transfer history"
         )
+
+# League Management Endpoints
+@app.post("/leagues", response_model=LeagueResponse, status_code=status.HTTP_201_CREATED)
+async def create_league(
+    league_data: LeagueCreateRequest,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Create a new fantasy league."""
+    try:
+        league = league_service.create_league(
+            db=db,
+            user_id=current_user.id,
+            name=league_data.name,
+            description=league_data.description,
+            is_private=league_data.is_private,
+            max_participants=league_data.max_participants
+        )
+        
+        return LeagueResponse(
+            id=league.id,
+            name=league.name,
+            description=league.description,
+            is_private=league.is_private,
+            is_creator=True,
+            participants=1,  # Creator is automatically added
+            max_participants=league.max_participants,
+            created_at=league.created_at.isoformat(),
+            join_code=league.join_code
+        )
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating league: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create league")
+
+@app.get("/leagues", response_model=List[LeagueResponse])
+async def get_user_leagues(
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Get all leagues the current user is participating in."""
+    try:
+        leagues = league_service.get_user_leagues(db=db, user_id=current_user.id)
+        return [LeagueResponse(**league) for league in leagues]
+    except Exception as e:
+        logger.error(f"Error fetching user leagues: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch leagues")
+
+@app.get("/leagues/public", response_model=List[Dict])
+async def get_public_leagues(
+    skip: int = 0,
+    limit: int = 20,
+    db: Session = Depends(get_db)
+):
+    """Get public leagues that users can join."""
+    try:
+        leagues = league_service.get_public_leagues(db=db, skip=skip, limit=limit)
+        return leagues
+    except Exception as e:
+        logger.error(f"Error fetching public leagues: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch public leagues")
+
+@app.post("/leagues/join", response_model=LeagueJoinResponse)
+async def join_league_by_code(
+    join_data: LeagueJoinRequest,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Join a league using a join code."""
+    try:
+        result = league_service.join_league_by_code(
+            db=db,
+            join_code=join_data.join_code,
+            user_id=current_user.id
+        )
+        return LeagueJoinResponse(**result)
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error joining league: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to join league")
+
+@app.post("/leagues/{league_id}/join", response_model=LeagueJoinResponse)
+async def join_league_by_id(
+    league_id: int,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Join a public league by ID."""
+    try:
+        result = league_service.join_league_by_id(
+            db=db,
+            league_id=league_id,
+            user_id=current_user.id
+        )
+        return LeagueJoinResponse(**result)
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error joining league: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to join league")
+
+@app.delete("/leagues/{league_id}/leave")
+async def leave_league(
+    league_id: int,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Leave a league."""
+    try:
+        league_service.leave_league(db=db, league_id=league_id, user_id=current_user.id)
+        return {"message": "Successfully left the league"}
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error leaving league: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to leave league")
+
+@app.get("/leagues/{league_id}/leaderboard", response_model=LeaderboardResponse)
+async def get_league_leaderboard(
+    league_id: int,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Get league leaderboard."""
+    try:
+        leaderboard = league_service.get_league_leaderboard(
+            db=db,
+            league_id=league_id,
+            user_id=current_user.id
+        )
+        return LeaderboardResponse(**leaderboard)
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error fetching leaderboard: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch leaderboard")
+
+@app.put("/leagues/{league_id}", response_model=LeagueResponse)
+async def update_league(
+    league_id: int,
+    update_data: LeagueUpdateRequest,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Update league settings (creator only)."""
+    try:
+        league = league_service.update_league(
+            db=db,
+            league_id=league_id,
+            user_id=current_user.id,
+            name=update_data.name,
+            description=update_data.description,
+            max_participants=update_data.max_participants
+        )
+        
+        # Get participant count for response
+        participant_count = db.query(FantasyLeagueParticipant).filter(
+            FantasyLeagueParticipant.league_id == league_id
+        ).count()
+        
+        return LeagueResponse(
+            id=league.id,
+            name=league.name,
+            description=league.description,
+            is_private=league.is_private,
+            is_creator=True,
+            participants=participant_count,
+            max_participants=league.max_participants,
+            created_at=league.created_at.isoformat(),
+            join_code=league.join_code
+        )
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating league: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update league")
 
 # Run the app
 if __name__ == "__main__":
