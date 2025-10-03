@@ -1065,6 +1065,23 @@ async def update_league(
         logger.error(f"Error updating league: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update league")
 
+@app.delete("/leagues/{league_id}")
+async def delete_league(
+    league_id: int,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Delete a league (creator only)."""
+    try:
+        league_service.delete_league(db=db, league_id=league_id, user_id=current_user.id)
+        return {"message": "League deleted successfully"}
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error deleting league: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete league")
+
 # Run the app
 if __name__ == "__main__":
     import uvicorn

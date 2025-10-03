@@ -313,6 +313,29 @@ class LeagueService:
         
         logger.info(f"League {league_id} updated by user {user_id}")
         return league
+    
+    @staticmethod
+    def delete_league(db: Session, league_id: int, user_id: int) -> bool:
+        """Delete a league (creator only)."""
+        
+        league = db.query(FantasyLeague).filter(FantasyLeague.id == league_id).first()
+        if not league:
+            raise ValueError("League not found")
+        
+        if league.creator_id != user_id:
+            raise ValueError("Only league creator can delete the league")
+        
+        # Delete all participants first (cascading)
+        db.query(FantasyLeagueParticipant).filter(
+            FantasyLeagueParticipant.league_id == league_id
+        ).delete()
+        
+        # Delete the league
+        db.delete(league)
+        db.commit()
+        
+        logger.info(f"League {league_id} deleted by user {user_id}")
+        return True
 
 
 # Global service instance
