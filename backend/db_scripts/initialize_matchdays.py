@@ -1,15 +1,19 @@
 import sys
 from pathlib import Path
+
+# Add the parent directory (backend) to the Python path
+backend_path = Path(__file__).parent.parent
+sys.path.insert(0, str(backend_path))
+
+# Add src directory to path
+src_path = backend_path / "src"
+sys.path.insert(0, str(src_path))
+
+from services.matchday_initializer import initialize_laliga_matchdays
 import logging
 
-# Add src to path
-src_path = Path(__file__).parent / "src"
-sys.path.append(str(src_path))
-
-from src.services.matchday_initializer import initialize_laliga_matchdays
-
-# Your COMPLETE LaLiga 2024-25 fixture data (ALL 38 matchdays)
-LALIGA_2024_25_COMPLETE_FIXTURES = """2279399,2025-08-15,Round 1,Girona,1,Rayo Vallecano,3,,https://r2.thesportsdb.com/images/media/event/thumb/mkqone1751449889.jpg
+# Your COMPLETE LaLiga 2025-26 fixture data (ALL 38 matchdays)
+LALIGA_2025_26_COMPLETE_FIXTURES = """2279399,2025-08-15,Round 1,Girona,1,Rayo Vallecano,3,,https://r2.thesportsdb.com/images/media/event/thumb/mkqone1751449889.jpg
 2279403,2025-08-15,Round 1,Villarreal,2,Real Oviedo,0,,https://r2.thesportsdb.com/images/media/event/thumb/bz4b851751449895.jpg
 2279400,2025-08-16,Round 1,Mallorca,0,Barcelona,3,,https://r2.thesportsdb.com/images/media/event/thumb/4skf9w1751449890.jpg
 2279394,2025-08-16,Round 1,Deportivo Alavés,2,Levante,1,,https://r2.thesportsdb.com/images/media/event/thumb/5hwveb1751449881.jpg
@@ -76,10 +80,6 @@ LALIGA_2024_25_COMPLETE_FIXTURES = """2279399,2025-08-15,Round 1,Girona,1,Rayo V
 2279463,2025-09-27,Round 7,Villarreal,1,Athletic Bilbao,0,,https://r2.thesportsdb.com/images/media/event/thumb/89nmrj1751449983.jpg
 2279461,2025-09-28,Round 7,Rayo Vallecano,0,Sevilla,1,,https://r2.thesportsdb.com/images/media/event/thumb/qxxig41751449980.jpg
 2279457,2025-09-28,Round 7,Elche,2,Celta Vigo,1,,https://r2.thesportsdb.com/images/media/event/thumb/a8krhq1751449974.jpg
-2279455,2025-09-28,Round 7,Barcelona,2,Real Sociedad,1,,https://r2.thesportsdb.com/images/media/event/thumb/qedwh31751449972.jpg
-2279456,2025-09-28,Round 7,Real Betis,2,Osasuna,0,,https://r2.thesportsdb.com/images/media/event/thumb/w9eun51751449973.jpg
-2279462,2025-09-29,Round 7,Valencia,,Real Oviedo,,,https://r2.thesportsdb.com/images/media/event/thumb/nhb69e1751449982.jpg
-2279469,2025-10-03,Round 8,Osasuna,,Getafe,,,https://r2.thesportsdb.com/images/media/event/thumb/pqanv81751449991.jpg
 2279472,2025-10-04,Round 8,Real Oviedo,,Levante,,,https://r2.thesportsdb.com/images/media/event/thumb/m2tzjh1751449995.jpg
 2279468,2025-10-04,Round 8,Girona,,Valencia,,,https://r2.thesportsdb.com/images/media/event/thumb/vh1pm11751449989.jpg
 2279465,2025-10-04,Round 8,Athletic Bilbao,,Mallorca,,,https://r2.thesportsdb.com/images/media/event/thumb/dnj3s91751449986.jpg
@@ -398,12 +398,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
-    logger.info("=== LaLiga COMPLETE Matchday Initialization ===")
+    logger.info("=== LaLiga 2025-26 COMPLETE Matchday Initialization ===")
     
     try:
         # Parse the CSV to see how many we have
-        lines = [line for line in LALIGA_2024_25_COMPLETE_FIXTURES.split('\n') if line.strip()]
-        logger.info(f"CSV contains {len(lines)} fixtures")
+        lines = [line for line in LALIGA_2025_26_COMPLETE_FIXTURES.split('\n') if line.strip()]
+        logger.info(f"CSV contains {len(lines)} fixtures for 2025-26 season")
         
         # Count unique rounds
         rounds = set()
@@ -418,10 +418,10 @@ if __name__ == "__main__":
         
         logger.info(f"CSV contains {len(rounds)} unique matchdays: {sorted(rounds)}")
         
-        results = initialize_laliga_matchdays(LALIGA_2024_25_COMPLETE_FIXTURES)
+        results = initialize_laliga_matchdays(LALIGA_2025_26_COMPLETE_FIXTURES)
         
         print("\n" + "="*80)
-        print("INITIALIZATION COMPLETE!")
+        print("LALIGA 2025-26 SEASON INITIALIZATION COMPLETE!")
         print("="*80)
         print(f"Matchdays created/updated: {results.get('matchdays_created', 0)}")
         print(f"Matches linked: {results.get('matches_updated', 0)}")
