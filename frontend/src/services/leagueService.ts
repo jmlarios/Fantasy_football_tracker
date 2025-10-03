@@ -128,6 +128,30 @@ const leagueService = {
       console.error('Error fetching leaderboard:', error);
       throw new Error('Failed to load leaderboard');
     }
+  },
+
+  updateLeague: async (leagueId: number, data: {
+    name?: string;
+    description?: string;
+    max_participants?: number;
+  }): Promise<League> => {
+    try {
+      const response = await api.put(`/leagues/${leagueId}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating league:', error);
+      throw new Error('Failed to update league');
+    }
+  },
+
+  deleteLeague: async (leagueId: number): Promise<{ message: string }> => {
+    try {
+      const response = await api.delete(`/leagues/${leagueId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting league:', error);
+      throw new Error('Failed to delete league');
+    }
   }
 };
 
