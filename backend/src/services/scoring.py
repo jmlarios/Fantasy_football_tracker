@@ -1,111 +1,261 @@
-from typing import Dict, List, Optional
-from sqlalchemy.orm import Session
+"""Fantasy scoring system for LaLiga Fantasy Football Tracker."""
 import logging
+from typing import Dict, Any
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 class FantasyScoring:
-    """
-    LaLiga Fantasy Football Scoring System
+    """Calculate fantasy points based on player performance."""
     
-    Official scoring rules based on LaLiga Fantasy Football:
-    - Match participation and goal scoring points
-    - Clean sheet bonuses for defensive positions
-    - Card penalties and bonus statistics
-    """
+    SCORING_RULES = {
+        'appearance': 1,
+        'minute_threshold': 60,
+        'goals': {
+            'GK': 6,
+            'DEF': 6,
+            'MID': 5,
+            'FWD': 4
+        },
+        'assists': 3,
+        'clean_sheet': {
+            'GK': 4,
+            'DEF': 4,
+            'MID': 1,
+            'FWD': 0
+        },
+        'yellow_card': -1,
+        'red_card': -3,
+        'own_goal': -2,
+        'penalty_missed': -2,
+        'penalty_saved': 5,
+        'saves_per_point': 3,  # Every 3 saves = 1 point
+
+        'captain_multiplier': 2.0
+    }
+    
+    @classmethod
+    def calculate_player_points(cls, player_stats: Dict[str, Any], 
+                              player_position: str, team_clean_sheet: bool = False) -> float:
+        """
+        Calculate fantasy points for a player.
+        
+        Args:
+            player_stats: Player's match statistics
+            player_position: Player position (GK, DEF, MID, FWD)
+            team_clean_sheet: Whether player's team kept a clean sheet
+            
+        Returns:
+            Total fantasy points
+        """
+        points = 0.0
+        
+        try:
+            # Appearance points
+            minutes = player_stats.get('minutes_played', 0)
+            if minutes >= cls.SCORING_RULES['minute_threshold']:
+                points += cls.SCORING_RULES['appearance']
+            elif minutes > 0:
+                points += 0.5
+            
+            # Goals
+            goals = player_stats.get('goals', 0)
+            if goals > 0:
+                points_per_goal = cls.SCORING_RULES['goals'].get(player_position, 4)
+                points += goals * points_per_goal
+            
+            # Assists
+            assists = player_stats.get('assists', 0)
+            points += assists * cls.SCORING_RULES['assists']
+            
+            # Clean sheet
+            if team_clean_sheet:
+                points += cls.SCORING_RULES['clean_sheet'].get(player_position, 0)
+            
+            # Cards
+            yellow_cards = player_stats.get('yellow_cards', 0)
+            red_cards = player_stats.get('red_cards', 0)
+            points += (yellow_cards * cls.SCORING_RULES['yellow_card'] + 
+                      red_cards * cls.SCORING_RULES['red_card'])
+            
+            # Goalkeeper saves
+            if player_position == 'GK':
+                saves = player_stats.get('saves', 0)
+                points += saves / cls.SCORING_RULES['saves_per_point']
+            
+            # Penalties
+            own_goals = player_stats.get('own_goals', 0)
+            penalties_missed = player_stats.get('penalties_missed', 0)
+            penalties_saved = player_stats.get('penalties_saved', 0)
+            
+            points += (own_goals * cls.SCORING_RULES['own_goal'] +
+                      penalties_missed * cls.SCORING_RULES['penalty_missed'] +
+                      penalties_saved * cls.SCORING_RULES['penalty_saved'])
+            
+            logger.debug(f"Calculated {points:.1f} points for {player_position}")
+            
+        except Exception as e:
+            logger.error(f"Error calculating fantasy points: {e}")
+            return 0.0
+        
+        return max(0.0, points)  # Don't allow negative total points
+    
+    @classmethod
+    def get_points_breakdown(cls, player_stats: Dict[str, Any], 
+                            player_position: str, team_clean_sheet: bool = False) -> Dict[str, float]:
+        """
+        Get detailed breakdown of fantasy points for a player.
+        
+        Args:
+            player_stats: Player's match statistics
+            player_position: Player position (GK, DEF, MID, FWD)
+            team_clean_sheet: Whether player's team kept a clean sheet
+            
+        Returns:
+            Dictionary with points breakdown by category
+        """
+        breakdown = {
+            'points_from_minutes': 0.0,
+            'points_from_goals': 0.0,
+            'points_from_assists': 0.0,
+            'points_from_clean_sheet': 0.0,
+            'points_from_saves': 0.0,
+            'points_from_cards': 0.0,
+            'penalty_points': 0.0
+        }
+        
+        try:
+            # Minutes/appearance points
+            minutes = player_stats.get('minutes_played', 0)
+            if minutes >= cls.SCORING_RULES['minute_threshold']:
+                breakdown['points_from_minutes'] = cls.SCORING_RULES['appearance']
+            elif minutes > 0:
+                breakdown['points_from_minutes'] = 0.5
+            
+            # Goals
+            goals = player_stats.get('goals', 0)
+            if goals > 0:
+                points_per_goal = cls.SCORING_RULES['goals'].get(player_position, 4)
+                breakdown['points_from_goals'] = goals * points_per_goal
+            
+            # Assists
+            assists = player_stats.get('assists', 0)
+            breakdown['points_from_assists'] = assists * cls.SCORING_RULES['assists']
+            
+            # Clean sheet
+            if team_clean_sheet:
+                breakdown['points_from_clean_sheet'] = cls.SCORING_RULES['clean_sheet'].get(player_position, 0)
+            
+            # Cards (negative points)
+            yellow_cards = player_stats.get('yellow_cards', 0)
+            red_cards = player_stats.get('red_cards', 0)
+            breakdown['points_from_cards'] = (yellow_cards * cls.SCORING_RULES['yellow_card'] + 
+                                             red_cards * cls.SCORING_RULES['red_card'])
+            
+            # Goalkeeper saves
+            if player_position == 'GK':
+                saves = player_stats.get('saves', 0)
+                breakdown['points_from_saves'] = saves / cls.SCORING_RULES['saves_per_point']
+            
+            # Penalties (negative for missed/own goals, positive for saved)
+            own_goals = player_stats.get('own_goals', 0)
+            penalties_missed = player_stats.get('penalties_missed', 0)
+            penalties_saved = player_stats.get('penalties_saved', 0)
+            
+            breakdown['penalty_points'] = (own_goals * cls.SCORING_RULES['own_goal'] +
+                                          penalties_missed * cls.SCORING_RULES['penalty_missed'] +
+                                          penalties_saved * cls.SCORING_RULES['penalty_saved'])
+            
+        except Exception as e:
+            logger.error(f"Error getting points breakdown: {e}")
+        
+        return breakdown
+    
+    @classmethod
+    def apply_captain_multiplier(cls, base_points: float, is_captain: bool = False) -> float:
+        """Apply captain multiplier (2x) to base points."""
+        return base_points * 2.0 if is_captain else base_points
+
+
+# Global instance
+fantasy_scoring = FantasyScoring()
+
+from typing import List, Dict, Optional
+from sqlalchemy.orm import Session
+
+class FantasyScoring:
+    """Calculate fantasy points based on player performance."""
     
     def __init__(self):
-        # Official LaLiga Fantasy scoring rules from the provided images
+        # Scoring rules configuration
         self.scoring_rules = {
-            # Captain multiplier
-            'captain_multiplier': 2.0,  # Captain scores double points
-
-            # Basic match participation
             'match_played': {
-                'less_than_60': 1,      # Playing less than 60 minutes
-                '60_or_more': 2         # Playing 60 minutes or more
+                '60_or_more': 1,
+                'less_than_60': 0.5
             },
-            
-            # Goal scoring (position-dependent)
             'goals': {
-                'GK': 6,                # Goalkeeper
-                'DEF': 6,               # Defender  
-                'MID': 5,               # Midfielder
-                'FWD': 4                # Forward
+                'GK': 6,
+                'DEF': 6,
+                'MID': 5,
+                'FWD': 4
             },
-
-            # Assists
             'assists': {
-                'goal_assist': 3,       # Last pass leading to a goal
-                'assist_without_goal': 1 # Last pass leading to a clear goal-scoring chance
+                'goal_assist': 3,
+                'assist_without_goal': 1
             },
-
-            # Clean sheet points (position-dependent, >60 min required)
             'clean_sheet': {
-                'GK': 4,                # Goalkeeper
-                'DEF': 3,               # Defender
-                'MID': 2,               # Midfielder
-                'FWD': 1                # Forward
+                'GK': 4,
+                'DEF': 4,
+                'MID': 1,
+                'FWD': 0
             },
-
-            # Penalty actions
-            'penalties': {
-                'missed': -2,           # Missed penalty (regardless of position)
-                'saved': 5,             # Penalty saved (goalkeeper)
-                'won': 2,               # Won penalty (regardless of position)
-                'committed': -2         # Committed penalty (regardless of position)
-            },
-
-            # Cards (negative points)
             'cards': {
-                'yellow': -1,           # Yellow card
-                'double_yellow': -1,    # Double yellow card (same as single yellow)
-                'red': -3               # Red card
+                'yellow': -1,
+                'red': -3
             },
-
-            # Goals conceded (for GK and DEF only)
             'goals_conceded': {
-                'threshold': 2,         # Every 2 goals conceded
-                'GK': -2,              # -2 points for GK
-                'DEF': -2              # -2 points for DEF
+                'threshold': 2,  # Every 2 goals conceded
+                'GK': -1,
+                'DEF': -1
             },
-
-            # Goalkeeper specific
+            'own_goal': -2,
+            'penalty_missed': -2,
+            'penalty_saved': 5,
             'saves': {
-                'threshold': 2,         # Every 2 saves
-                'points': 1             # 1 point per 2 saves
+                'threshold': 3,
+                'points': 1
             },
-
-            # Defensive bonus stats
+            'penalties': {
+                'won': 2,
+                'committed': -1,
+                'saved': 5,
+                'missed': -2
+            },
             'defensive_bonus': {
                 'balls_recovered': {
-                    'threshold': 5,     # Every 5 balls recovered
-                    'points': 1         # 1 point per 5 recoveries
+                    'threshold': 5,
+                    'points': 1
                 },
                 'clearances': {
-                    'threshold': 3,     # Every 3 clearances
-                    'points': 1         # 1 point per 3 clearances
+                    'threshold': 3,
+                    'points': 1
                 }
             },
-
-            # Attack bonus stats  
             'attack_bonus': {
                 'shots_on_target': {
-                    'threshold': 2,     # Every 2 shots on target
-                    'points': 1         # 1 point per 2 shots
+                    'threshold': 2,
+                    'points': 1
                 },
                 'successful_dribbles': {
-                    'threshold': 2,     # Every 2 successful dribbles
-                    'points': 1         # 1 point per 2 dribbles
+                    'threshold': 2,
+                    'points': 1
                 },
                 'entries_into_box': {
-                    'threshold': 2,     # Every 2 entries into the box
-                    'points': 1         # 1 point per 2 entries
+                    'threshold': 2,
+                    'points': 1
                 }
-            }
+            },
+            'captain_multiplier': 2.0
         }
     
     def calculate_player_points(self, player_stats: Dict, player_position: str, 
@@ -521,4 +671,3 @@ if __name__ == "__main__":
         print(f"{position}: {points['total']} points")
         print(f"Breakdown: {points}")
         print()
-        
