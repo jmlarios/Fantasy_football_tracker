@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import leagueService, { League, LeagueData, PublicLeague, LeaderboardData } from '../services/leagueService';
+import { fantasyAPI } from '../services/api';
+import { FantasyTeam } from '../types/fantasy';
 
 interface CreateFormData {
   name: string;
   description: string;
   is_private: boolean;
   max_participants: number;
+  team_name: string;
 }
 
 interface JoinFormData {
   join_code: string;
+  team_name: string;
 }
 
 const Header: React.FC = () => {
@@ -112,6 +116,7 @@ const Header: React.FC = () => {
 };
 
 const MyFantasyLeagues: React.FC = () => {
+  const navigate = useNavigate();
   const [leagues, setLeagues] = useState<League[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [showCreateForm, setShowCreateForm] = useState<boolean>(false);
@@ -119,16 +124,21 @@ const MyFantasyLeagues: React.FC = () => {
   const [selectedLeague, setSelectedLeague] = useState<League | null>(null);
   const [showLeaderboard, setShowLeaderboard] = useState<boolean>(false);
   const [leaderboardData, setLeaderboardData] = useState<LeaderboardData | null>(null);
+  const [teamOption, setTeamOption] = useState<'new' | 'existing'>('new');
+  const [availableTeams, setAvailableTeams] = useState<FantasyTeam[]>([]);
+  const [selectedExistingTeamId, setSelectedExistingTeamId] = useState<number | null>(null);
   
   const [createForm, setCreateForm] = useState<CreateFormData>({
     name: '',
     description: '',
     is_private: false,
-    max_participants: 20
+    max_participants: 20,
+    team_name: ''
   });
   
   const [joinForm, setJoinForm] = useState<JoinFormData>({
-    join_code: ''
+    join_code: '',
+    team_name: ''
   });
   
   const [publicLeagues, setPublicLeagues] = useState<PublicLeague[]>([]);
@@ -137,6 +147,17 @@ const MyFantasyLeagues: React.FC = () => {
   useEffect(() => {
     loadUserLeagues();
   }, []);
+
+  const loadAvailableTeams = async (): Promise<void> => {
+    try {
+      const teams = await fantasyAPI.getTeams();
+      // Filter teams that are not in any league (we need to check this via the API or assume all are available)
+      setAvailableTeams(teams);
+    } catch (error) {
+      console.error('Error loading teams:', error);
+      setAvailableTeams([]);
+    }
+  };
 
   const loadUserLeagues = async (): Promise<void> => {
     setLoading(true);
@@ -149,6 +170,11 @@ const MyFantasyLeagues: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOpenCreateForm = async (): Promise<void> => {
+    await loadAvailableTeams();
+    setShowCreateForm(true);
   };
 
   const loadPublicLeagues = async (): Promise<void> => {
@@ -170,14 +196,16 @@ const MyFantasyLeagues: React.FC = () => {
         name: createForm.name,
         description: createForm.description || undefined,
         is_private: createForm.is_private,
-        max_participants: createForm.max_participants
+        max_participants: createForm.max_participants,
+        team_name: createForm.team_name.trim() || undefined
       };
 
-      await leagueService.createLeague(leagueData);
+      const createdLeague = await leagueService.createLeague(leagueData);
       setShowCreateForm(false);
-      setCreateForm({ name: '', description: '', is_private: false, max_participants: 20 });
-      loadUserLeagues();
-      alert('League created successfully!');
+      setCreateForm({ name: '', description: '', is_private: false, max_participants: 20, team_name: '' });
+      
+      // Redirect to team page to select players
+      navigate(`/leagues/${createdLeague.id}/team`);
     } catch (error) {
       alert('Failed to create league. Please try again.');
     }
@@ -188,23 +216,26 @@ const MyFantasyLeagues: React.FC = () => {
     if (!joinForm.join_code.trim()) return;
 
     try {
-      const result = await leagueService.joinLeagueByCode(joinForm.join_code.trim().toUpperCase());
+      const teamName = joinForm.team_name.trim() || undefined;
+      const result = await leagueService.joinLeagueByCode(joinForm.join_code.trim().toUpperCase(), teamName);
       setShowJoinForm(false);
-      setJoinForm({ join_code: '' });
-      loadUserLeagues();
-      alert(`Successfully joined "${result.league_name}"!`);
+      setJoinForm({ join_code: '', team_name: '' });
+      
+      // Redirect to team page to select players
+      navigate(`/leagues/${result.league_id}/team`);
     } catch (error) {
       alert('Failed to join league. Please check the join code and try again.');
     }
   };
 
-  const handleJoinPublicLeague = async (leagueId: number, leagueName: string): Promise<void> => {
+  const handleJoinPublicLeague = async (leagueId: number, leagueName: string, teamName?: string): Promise<void> => {
     if (!window.confirm(`Join "${leagueName}"?`)) return;
 
     try {
-      const result = await leagueService.joinLeagueById(leagueId);
-      loadUserLeagues();
-      alert(`Successfully joined "${result.league_name}"!`);
+      const result = await leagueService.joinLeagueById(leagueId, teamName);
+      
+      // Redirect to team page to select players
+      navigate(`/leagues/${result.league_id}/team`);
     } catch (error) {
       alert('Failed to join league. Please try again.');
     }
@@ -396,7 +427,7 @@ const MyFantasyLeagues: React.FC = () => {
                 cursor: 'pointer',
                 whiteSpace: 'nowrap'
               }}
-              onClick={() => setShowCreateForm(true)}
+              onClick={handleOpenCreateForm}
             >
               + Create League
             </button>
@@ -659,22 +690,43 @@ const MyFantasyLeagues: React.FC = () => {
                       </div>
                     )}
                     
-                    <button 
-                      style={{
-                        backgroundColor: '#3b82f6',
-                        color: 'white',
-                        border: 'none',
-                        padding: '0.75rem 1.5rem',
-                        borderRadius: '6px',
-                        fontSize: '0.9rem',
-                        fontWeight: 'bold',
-                        cursor: 'pointer',
-                        width: '100%'
-                      }}
-                      onClick={() => handleViewLeaderboard(league)}
-                    >
-                      View Leaderboard →
-                    </button>
+                    <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                      <Link
+                        to={`/leagues/${league.id}/my-team`}
+                        style={{
+                          backgroundColor: '#10b981',
+                          color: 'white',
+                          border: 'none',
+                          padding: '0.75rem 1.5rem',
+                          borderRadius: '6px',
+                          fontSize: '0.9rem',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          flex: 1,
+                          textAlign: 'center',
+                          textDecoration: 'none',
+                          display: 'block'
+                        }}
+                      >
+                        View My Team
+                      </Link>
+                      <button 
+                        style={{
+                          backgroundColor: '#3b82f6',
+                          color: 'white',
+                          border: 'none',
+                          padding: '0.75rem 1.5rem',
+                          borderRadius: '6px',
+                          fontSize: '0.9rem',
+                          fontWeight: 'bold',
+                          cursor: 'pointer',
+                          flex: 1
+                        }}
+                        onClick={() => handleViewLeaderboard(league)}
+                      >
+                        Leaderboard →
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -767,6 +819,121 @@ const MyFantasyLeagues: React.FC = () => {
                     onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
                   />
                 </div>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ 
+                    display: 'block', 
+                    marginBottom: '0.5rem', 
+                    fontWeight: '500',
+                    color: '#374151'
+                  }}>
+                    Team Selection *
+                  </label>
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.5rem',
+                      cursor: 'pointer',
+                      marginBottom: '0.75rem'
+                    }}>
+                      <input
+                        type="radio"
+                        name="teamOption"
+                        value="new"
+                        checked={teamOption === 'new'}
+                        onChange={() => setTeamOption('new')}
+                      />
+                      <span style={{ fontWeight: '500', color: '#374151' }}>
+                        Create New Team
+                      </span>
+                    </label>
+                    <label style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '0.5rem',
+                      cursor: 'pointer'
+                    }}>
+                      <input
+                        type="radio"
+                        name="teamOption"
+                        value="existing"
+                        checked={teamOption === 'existing'}
+                        onChange={() => setTeamOption('existing')}
+                        disabled={availableTeams.length === 0}
+                      />
+                      <span style={{ fontWeight: '500', color: availableTeams.length === 0 ? '#9ca3af' : '#374151' }}>
+                        Use Existing Team {availableTeams.length === 0 && '(No teams available)'}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+                {teamOption === 'new' && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ 
+                      display: 'block', 
+                      marginBottom: '0.5rem', 
+                      fontWeight: '500',
+                      color: '#374151'
+                    }}>
+                      Team Name *
+                    </label>
+                    <input
+                      type="text"
+                      style={{ 
+                        width: '100%', 
+                        padding: '0.75rem', 
+                        border: '2px solid #e5e7eb', 
+                        borderRadius: '6px',
+                        fontSize: '1rem',
+                        transition: 'border-color 0.2s ease'
+                      }}
+                      value={createForm.team_name}
+                      onChange={(e) => handleCreateFormChange('team_name', e.target.value)}
+                      placeholder="Enter your team name for this league"
+                      required
+                      maxLength={100}
+                      onFocus={(e) => e.target.style.borderColor = '#10b981'}
+                      onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                    />
+                    <div style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>
+                      This will be your team name in this league
+                    </div>
+                  </div>
+                )}
+                {teamOption === 'existing' && availableTeams.length > 0 && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ 
+                      display: 'block', 
+                      marginBottom: '0.5rem', 
+                      fontWeight: '500',
+                      color: '#374151'
+                    }}>
+                      Select Team *
+                    </label>
+                    <select
+                      style={{ 
+                        width: '100%', 
+                        padding: '0.75rem', 
+                        border: '2px solid #e5e7eb', 
+                        borderRadius: '6px',
+                        fontSize: '1rem'
+                      }}
+                      value={selectedExistingTeamId ?? ''}
+                      onChange={(e) => setSelectedExistingTeamId(Number(e.target.value))}
+                      required
+                    >
+                      <option value="">-- Select a team --</option>
+                      {availableTeams.map(team => (
+                        <option key={team.id} value={team.id}>
+                          {team.name} ({team.player_count ?? 0}/{team.max_players} players)
+                        </option>
+                      ))}
+                    </select>
+                    <div style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>
+                      This team will be used for this league
+                    </div>
+                  </div>
+                )}
                 <div style={{ marginBottom: '1rem' }}>
                   <label style={{ 
                     display: 'block', 
@@ -963,6 +1130,36 @@ const MyFantasyLeagues: React.FC = () => {
                     />
                     <div style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>
                       Enter the 8-character code provided by the league creator
+                    </div>
+                  </div>
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ 
+                      display: 'block', 
+                      marginBottom: '0.5rem', 
+                      fontWeight: '500',
+                      color: '#374151'
+                    }}>
+                      Team Name (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      style={{ 
+                        width: '100%', 
+                        padding: '0.75rem', 
+                        border: '2px solid #e5e7eb', 
+                        borderRadius: '6px',
+                        fontSize: '1rem',
+                        transition: 'border-color 0.2s ease'
+                      }}
+                      value={joinForm.team_name}
+                      onChange={(e) => setJoinForm({...joinForm, team_name: e.target.value})}
+                      placeholder="Enter a custom team name for this league"
+                      maxLength={100}
+                      onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                      onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                    />
+                    <div style={{ fontSize: '0.875rem', color: '#6b7280', marginTop: '0.5rem' }}>
+                      Leave blank to use your default team name
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>

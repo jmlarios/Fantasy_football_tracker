@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from typing import List, Optional
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Boolean, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Float, Boolean, Text, UniqueConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, Mapped
 from sqlalchemy.sql import func
@@ -77,15 +77,15 @@ class FantasyTeam(Base):
     total_budget: Mapped[float] = Column(Float, default=100000000.0)
     
     # Team composition (could be extended to support formations)
-    max_players: Mapped[int] = Column(Integer, default=14)  # Standard team size
+    max_players: Mapped[int] = Column(Integer, default=11)  # Fixed team size: 11 players
     
     created_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = Column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="fantasy_teams")
-    team_players: Mapped[List["FantasyTeamPlayer"]] = relationship("FantasyTeamPlayer", back_populates="fantasy_team")
-    transfer_history: Mapped[List["TransferHistory"]] = relationship("TransferHistory", back_populates="fantasy_team")
+    team_players: Mapped[List["FantasyTeamPlayer"]] = relationship("FantasyTeamPlayer", back_populates="fantasy_team", cascade="all, delete-orphan")
+    transfer_history: Mapped[List["TransferHistory"]] = relationship("TransferHistory", back_populates="fantasy_team", cascade="all, delete-orphan")
     league_participations: Mapped[List["FantasyLeagueParticipant"]] = relationship("FantasyLeagueParticipant", back_populates="fantasy_team")
 
     def __repr__(self):
@@ -282,6 +282,7 @@ class FantasyLeagueParticipant(Base):
     league_id: Mapped[int] = Column(Integer, ForeignKey('fantasy_leagues.id'), nullable=False)
     user_id: Mapped[int] = Column(Integer, ForeignKey('users.id'), nullable=False)
     fantasy_team_id: Mapped[int] = Column(Integer, ForeignKey('fantasy_teams.id'), nullable=False)
+    league_team_id: Mapped[Optional[int]] = Column(Integer, ForeignKey('league_teams.id'), nullable=True)
     
     # Participant tracking
     joined_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
@@ -290,9 +291,91 @@ class FantasyLeagueParticipant(Base):
     league: Mapped["FantasyLeague"] = relationship("FantasyLeague", back_populates="participants")
     user: Mapped["User"] = relationship("User", back_populates="league_participations")
     fantasy_team: Mapped["FantasyTeam"] = relationship("FantasyTeam", back_populates="league_participations")
+    league_team: Mapped[Optional["LeagueTeam"]] = relationship("LeagueTeam", back_populates="participant")
 
     def __repr__(self):
         return f"<FantasyLeagueParticipant(league_id={self.league_id}, user_id={self.user_id})>"
+
+
+class LeagueTeam(Base):
+    """
+    League-specific team instance. Each team can participate in multiple leagues
+    with independent points and player selections.
+    """
+    __tablename__ = 'league_teams'
+
+    id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
+    fantasy_team_id: Mapped[int] = Column(Integer, ForeignKey('fantasy_teams.id'), nullable=False)
+    league_id: Mapped[int] = Column(Integer, ForeignKey('fantasy_leagues.id'), nullable=False)
+    
+    # League-specific team name (optional, defaults to fantasy team name)
+    team_name: Mapped[Optional[str]] = Column(String(100), nullable=True)
+    
+    # League-specific stats
+    league_points: Mapped[float] = Column(Float, default=0.0)
+    league_rank: Mapped[Optional[int]] = Column(Integer, nullable=True)
+    
+    # Budget tracking (starts at 100M for each league)
+    total_budget: Mapped[float] = Column(Float, default=100000000.0)
+    
+    created_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    fantasy_team: Mapped["FantasyTeam"] = relationship("FantasyTeam")
+    league: Mapped["FantasyLeague"] = relationship("FantasyLeague")
+    league_team_players: Mapped[List["LeagueTeamPlayer"]] = relationship("LeagueTeamPlayer", back_populates="league_team", cascade="all, delete-orphan")
+    participant: Mapped[Optional["FantasyLeagueParticipant"]] = relationship("FantasyLeagueParticipant", back_populates="league_team")
+
+    def __repr__(self):
+        return f"<LeagueTeam(id={self.id}, fantasy_team_id={self.fantasy_team_id}, league_id={self.league_id}, points={self.league_points})>"
+
+    @property
+    def current_budget_used(self) -> float:
+        """Calculate current budget used by league team players."""
+        total_cost = 0.0
+        for league_team_player in self.league_team_players:
+            if league_team_player.player:
+                total_cost += league_team_player.player.price
+        return total_cost
+    
+    @property
+    def remaining_budget(self) -> float:
+        """Calculate remaining budget for this league team."""
+        return self.total_budget - self.current_budget_used
+
+
+class LeagueTeamPlayer(Base):
+    """
+    Association table between league teams and players.
+    Ensures player uniqueness per league - each player can only be owned by one team per league.
+    """
+    __tablename__ = 'league_team_players'
+    __table_args__ = (
+        UniqueConstraint('league_id', 'player_id', name='uix_league_player'),
+    )
+
+    id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
+    league_team_id: Mapped[int] = Column(Integer, ForeignKey('league_teams.id'), nullable=False)
+    player_id: Mapped[int] = Column(Integer, ForeignKey('players.id'), nullable=False)
+    league_id: Mapped[int] = Column(Integer, ForeignKey('fantasy_leagues.id'), nullable=False)
+    
+    # Position in team formation
+    position_in_team: Mapped[str] = Column(String(50), nullable=False)  # GK, DEF, MID, FWD
+    is_captain: Mapped[bool] = Column(Boolean, default=False)
+    is_vice_captain: Mapped[bool] = Column(Boolean, default=False)
+    
+    # Transfer tracking
+    added_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
+    added_for_matchday: Mapped[Optional[int]] = Column(Integer, nullable=True)
+    
+    # Relationships
+    league_team: Mapped["LeagueTeam"] = relationship("LeagueTeam", back_populates="league_team_players")
+    player: Mapped["Player"] = relationship("Player")
+    league: Mapped["FantasyLeague"] = relationship("FantasyLeague")
+
+    def __repr__(self):
+        return f"<LeagueTeamPlayer(league_team_id={self.league_team_id}, player_id={self.player_id}, league_id={self.league_id})>"
 
 
 class Matchday(Base):

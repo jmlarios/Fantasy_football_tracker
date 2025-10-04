@@ -52,6 +52,12 @@ export const fantasyAPI = {
   validateTeam: (teamId: number): Promise<TeamValidation> =>
     api.get(`/fantasy-teams/${teamId}/validate`).then(res => res.data),
   
+  updateTeam: (teamId: number, data: { name: string }) =>
+    api.put(`/fantasy-teams/${teamId}`, data).then(res => res.data),
+  
+  deleteTeam: (teamId: number) =>
+    api.delete(`/fantasy-teams/${teamId}`).then(res => res.data),
+  
   // Players
   getPlayers: (skip = 0, limit = 50): Promise<Player[]> =>
     api.get(`/players?skip=${skip}&limit=${limit}`).then(res => res.data),
@@ -88,12 +94,12 @@ export const leagueAPI = {
     api.get(`/leagues/public?skip=${skip}&limit=${limit}`).then(res => res.data),
   
   // Join league by code
-  joinLeagueByCode: (joinCode: string) =>
-    api.post('/leagues/join', { join_code: joinCode }).then(res => res.data),
+  joinLeagueByCode: (joinCode: string, teamName?: string) =>
+    api.post('/leagues/join', { join_code: joinCode, team_name: teamName }).then(res => res.data),
   
   // Join league by ID (public leagues)
-  joinLeagueById: (leagueId: number) =>
-    api.post(`/leagues/${leagueId}/join`).then(res => res.data),
+  joinLeagueById: (leagueId: number, teamName?: string) =>
+    api.post(`/leagues/${leagueId}/join`, null, { params: { team_name: teamName } }).then(res => res.data),
   
   // Leave league
   leaveLeague: (leagueId: number) =>
@@ -110,6 +116,14 @@ export const leagueAPI = {
     max_participants?: number;
   }) =>
     api.put(`/leagues/${leagueId}`, data).then(res => res.data),
+  
+  // Get my team in a specific league
+  getMyLeagueTeam: (leagueId: number) =>
+    api.get(`/leagues/${leagueId}/my-team`).then(res => res.data),
+  
+  // Update team name in a specific league
+  updateLeagueTeamName: (leagueId: number, teamName: string) =>
+    api.patch(`/leagues/${leagueId}/my-team`, { team_name: teamName }).then(res => res.data),
 };
 
 export default api;

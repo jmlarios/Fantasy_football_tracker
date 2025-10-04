@@ -107,10 +107,22 @@ const FantasyTeamsList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
+  const [editingTeam, setEditingTeam] = useState<{ id: number; name: string } | null>(null);
+  const [newTeamName, setNewTeamName] = useState('');
 
   useEffect(() => {
     loadTeams();
   }, []);
+
+  useEffect(() => {
+    // Close dropdown when clicking outside
+    const handleClickOutside = () => setActiveDropdown(null);
+    if (activeDropdown !== null) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [activeDropdown]);
 
   const loadTeams = async () => {
     try {
@@ -130,6 +142,59 @@ const FantasyTeamsList: React.FC = () => {
   const handleTeamCreated = (newTeam: FantasyTeam) => {
     setTeams([...teams, newTeam]);
     setShowCreateModal(false);
+  };
+
+  const handleEditTeam = (team: FantasyTeam, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditingTeam({ id: team.id, name: team.name });
+    setNewTeamName(team.name);
+    setActiveDropdown(null);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTeam || !newTeamName.trim()) return;
+
+    try {
+      await fantasyAPI.updateTeam(editingTeam.id, { name: newTeamName.trim() });
+      setTeams(teams.map(t => t.id === editingTeam.id ? { ...t, name: newTeamName.trim() } : t));
+      setEditingTeam(null);
+      setNewTeamName('');
+    } catch (err: any) {
+      alert('Failed to update team name: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingTeam(null);
+    setNewTeamName('');
+  };
+
+  const handleDeleteTeam = async (teamId: number, teamName: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!window.confirm(`Are you sure you want to delete "${teamName}"? This action cannot be undone.`)) {
+      setActiveDropdown(null);
+      return;
+    }
+
+    try {
+      await fantasyAPI.deleteTeam(teamId);
+      setTeams(teams.filter(t => t.id !== teamId));
+      setActiveDropdown(null);
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.detail || err.message;
+      alert('Failed to delete team: ' + errorMessage);
+      setActiveDropdown(null);
+    }
+  };
+
+  const toggleDropdown = (teamId: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setActiveDropdown(activeDropdown === teamId ? null : teamId);
   };
 
   if (loading) {
@@ -243,59 +308,82 @@ const FantasyTeamsList: React.FC = () => {
             gap: '1.5rem'
           }}>
             {teams.map((team) => (
-              <Link
+              <div
                 key={team.id}
-                to={`/fantasy-teams/${team.id}`}
                 style={{
-                  textDecoration: 'none',
-                  color: 'inherit'
+                  position: 'relative'
                 }}
               >
-                <div
-                  key={team.id}
+                <Link
+                  to={`/fantasy-teams/${team.id}`}
                   style={{
-                    backgroundColor: 'white',
-                    borderRadius: '12px',
-                    padding: '1.5rem',
-                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.07)',
-                    border: '1px solid #e5e7eb',
-                    transition: 'all 0.2s ease',
-                    cursor: 'pointer'
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 8px 25px rgba(0, 0, 0, 0.15)';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.07)';
+                    textDecoration: 'none',
+                    color: 'inherit',
+                    display: 'block'
                   }}
                 >
-                  <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    marginBottom: '1rem'
-                  }}>
-                    <h3 style={{
-                      fontSize: '1.3rem',
-                      fontWeight: '600',
-                      color: '#1f2937',
-                      margin: 0
-                    }}>
-                      {team.name}
-                    </h3>
+                  <div
+                    style={{
+                      backgroundColor: 'white',
+                      borderRadius: '12px',
+                      padding: '1.5rem',
+                      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.07)',
+                      border: '1px solid #e5e7eb',
+                      transition: 'all 0.2s ease',
+                      cursor: 'pointer'
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 8px 25px rgba(0, 0, 0, 0.15)';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.07)';
+                    }}
+                  >
                     <div style={{
-                      backgroundColor: '#f3f4f6',
-                      color: '#374151',
-                      padding: '0.25rem 0.75rem',
-                      borderRadius: '20px',
-                      fontSize: '0.875rem',
-                      fontWeight: '500'
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      marginBottom: '1rem'
                     }}>
-                      ID: {team.id}
+                      <h3 style={{
+                        fontSize: '1.3rem',
+                        fontWeight: '600',
+                        color: '#1f2937',
+                        margin: 0,
+                        flex: 1
+                      }}>
+                        {team.name}
+                      </h3>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <div style={{
+                          backgroundColor: '#f3f4f6',
+                          color: '#374151',
+                          padding: '0.25rem 0.75rem',
+                          borderRadius: '20px',
+                          fontSize: '0.875rem',
+                          fontWeight: '500'
+                        }}>
+                          ID: {team.id}
+                        </div>
+                        {/* Dropdown menu button */}
+                        <button
+                          onClick={(e) => toggleDropdown(team.id, e)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            fontSize: '1.5rem',
+                            cursor: 'pointer',
+                            padding: '0.25rem',
+                            color: '#6b7280',
+                            lineHeight: 1
+                          }}
+                        >
+                          ⋮
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
                   <div style={{
                     display: 'grid',
@@ -332,7 +420,7 @@ const FantasyTeamsList: React.FC = () => {
                         fontWeight: 'bold',
                         color: '#3b82f6'
                       }}>
-                        0/{team.max_players}
+                        {team.player_count ?? 0}/{team.max_players}
                       </div>
                     </div>
                   </div>
@@ -360,7 +448,158 @@ const FantasyTeamsList: React.FC = () => {
                   </div>
                 </div>
               </Link>
+              
+              {/* Dropdown Menu */}
+              {activeDropdown === team.id && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '3.5rem',
+                    right: '1rem',
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                    border: '1px solid #e5e7eb',
+                    zIndex: 10,
+                    minWidth: '150px'
+                  }}
+                >
+                  <button
+                    onClick={(e) => handleEditTeam(team, e)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      width: '100%',
+                      padding: '0.75rem 1rem',
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      color: '#374151',
+                      borderBottom: '1px solid #f3f4f6',
+                      textAlign: 'left'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <span>✏️</span>
+                    <span>Edit Name</span>
+                  </button>
+                  <button
+                    onClick={(e) => handleDeleteTeam(team.id, team.name, e)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      width: '100%',
+                      padding: '0.75rem 1rem',
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      color: '#dc2626',
+                      textAlign: 'left'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#fef2f2'}
+                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <span>🗑️</span>
+                    <span>Delete Team</span>
+                  </button>
+                </div>
+              )}
+            </div>
             ))}
+          </div>
+        )}
+
+        {/* Edit Team Name Modal */}
+        {editingTeam && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}>
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '2rem',
+              maxWidth: '400px',
+              width: '90%'
+            }}>
+              <h2 style={{
+                fontSize: '1.5rem',
+                fontWeight: 'bold',
+                marginBottom: '1.5rem',
+                color: '#1f2937'
+              }}>
+                Edit Team Name
+              </h2>
+              <form onSubmit={handleSaveEdit}>
+                <input
+                  type="text"
+                  value={newTeamName}
+                  onChange={(e) => setNewTeamName(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '2px solid #e5e7eb',
+                    borderRadius: '6px',
+                    fontSize: '1rem',
+                    marginBottom: '1.5rem'
+                  }}
+                  placeholder="Enter new team name"
+                  required
+                  maxLength={50}
+                  autoFocus
+                />
+                <div style={{
+                  display: 'flex',
+                  gap: '1rem',
+                  justifyContent: 'flex-end'
+                }}>
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    style={{
+                      backgroundColor: '#f3f4f6',
+                      color: '#374151',
+                      border: 'none',
+                      padding: '0.75rem 1.5rem',
+                      borderRadius: '6px',
+                      fontSize: '1rem',
+                      fontWeight: '500',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    style={{
+                      backgroundColor: '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      padding: '0.75rem 1.5rem',
+                      borderRadius: '6px',
+                      fontSize: '1rem',
+                      fontWeight: '500',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Save
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 

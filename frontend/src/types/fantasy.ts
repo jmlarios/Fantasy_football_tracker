@@ -15,6 +15,7 @@ export interface FantasyTeam {
   total_points: number;
   max_players: number;
   total_budget: number;
+  player_count?: number;  // Number of players currently in the team
 }
 
 export interface TeamPlayer {

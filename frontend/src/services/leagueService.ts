@@ -5,6 +5,7 @@ interface LeagueData {
   description?: string;
   is_private: boolean;
   max_participants: number;
+  team_name?: string;
 }
 
 interface League {
@@ -90,9 +91,12 @@ const leagueService = {
     }
   },
 
-  joinLeagueByCode: async (joinCode: string): Promise<LeagueJoinResult> => {
+  joinLeagueByCode: async (joinCode: string, teamName?: string): Promise<LeagueJoinResult> => {
     try {
-      const response = await api.post('/leagues/join', { join_code: joinCode });
+      const response = await api.post('/leagues/join', { 
+        join_code: joinCode,
+        team_name: teamName 
+      });
       return response.data;
     } catch (error) {
       console.error('Error joining league by code:', error);
@@ -100,9 +104,11 @@ const leagueService = {
     }
   },
 
-  joinLeagueById: async (leagueId: number): Promise<LeagueJoinResult> => {
+  joinLeagueById: async (leagueId: number, teamName?: string): Promise<LeagueJoinResult> => {
     try {
-      const response = await api.post(`/leagues/${leagueId}/join`);
+      const response = await api.post(`/leagues/${leagueId}/join`, null, {
+        params: { team_name: teamName }
+      });
       return response.data;
     } catch (error) {
       console.error('Error joining league by ID:', error);
@@ -141,6 +147,16 @@ const leagueService = {
     } catch (error) {
       console.error('Error updating league:', error);
       throw new Error('Failed to update league');
+    }
+  },
+
+  updateTeamName: async (leagueId: number, teamName: string): Promise<{ league_id: number; team_id: number; team_name: string }> => {
+    try {
+      const response = await api.patch(`/leagues/${leagueId}/my-team`, { team_name: teamName });
+      return response.data;
+    } catch (error) {
+      console.error('Error updating team name:', error);
+      throw new Error('Failed to update team name');
     }
   },
 

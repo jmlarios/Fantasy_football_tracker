@@ -15,7 +15,7 @@ sys.path.append(str(src_path))
 
 # Importing necessary modules
 from config import get_db, test_database_connection, app_config
-from src.models import User, Player, FantasyTeam, FantasyTeamPlayer, Matchday, FantasyLeagueParticipant
+from src.models import User, Player, FantasyTeam, FantasyTeamPlayer, Matchday, FantasyLeagueParticipant, FantasyLeague, LeagueTeam
 from src.services.auth import auth_service
 from src.services import transfer_service
 from src.services.league_service import league_service
@@ -110,6 +110,7 @@ class FantasyTeamResponse(BaseModel):
     total_points: float
     max_players: int
     total_budget: float
+    player_count: int = 0  # Number of players currently in the team
     
     class Config:
         from_attributes = True
@@ -168,6 +169,7 @@ class LeagueCreateRequest(BaseModel):
     description: Optional[str] = None
     is_private: bool = False
     max_participants: int = 20
+    team_name: Optional[str] = None  # Team name for the creator's team in this league
 
 class LeagueJoinRequest(BaseModel):
     join_code: str
@@ -543,10 +545,28 @@ async def get_user_fantasy_teams(
 ):
     try:
         teams = fantasy_team_service.get_user_teams(db=db, user_id=current_user.id)
-        return [FantasyTeamResponse.model_validate(team) for team in teams]
+        team_responses = []
+        for team in teams:
+            # Count players in this team
+            player_count = db.query(FantasyTeamPlayer).filter(
+                FantasyTeamPlayer.fantasy_team_id == team.id
+            ).count()
+            
+            team_dict = {
+                'id': team.id,
+                'name': team.name,
+                'total_points': team.total_points,
+                'max_players': team.max_players,
+                'total_budget': team.total_budget,
+                'player_count': player_count
+            }
+            team_responses.append(FantasyTeamResponse(**team_dict))
+        
+        return team_responses
     except Exception as e:
         logger.error(f"Error fetching fantasy teams: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch fantasy teams")
+
 
 @app.get("/fantasy-teams/{team_id}", response_model=FantasyTeamDetailResponse)
 async def get_fantasy_team_detail(
@@ -643,6 +663,83 @@ async def set_team_captain(
     except Exception as e:
         logger.error(f"Error setting captain: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to set captain")
+
+@app.put("/fantasy-teams/{team_id}")
+async def update_fantasy_team(
+    team_id: int,
+    update_data: dict,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Update fantasy team name."""
+    try:
+        # Verify team ownership
+        team = db.query(FantasyTeam).filter(
+            FantasyTeam.id == team_id,
+            FantasyTeam.user_id == current_user.id
+        ).first()
+        
+        if not team:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fantasy team not found")
+        
+        # Update team name if provided
+        if 'name' in update_data and update_data['name']:
+            team.name = update_data['name']
+            db.commit()
+            db.refresh(team)
+            
+        return {"message": "Team updated successfully", "team": {"id": team.id, "name": team.name}}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating fantasy team: {e}")
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update team")
+
+@app.delete("/fantasy-teams/{team_id}")
+async def delete_fantasy_team(
+    team_id: int,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Delete a fantasy team if it's not part of any league."""
+    try:
+        # Verify team ownership
+        team = db.query(FantasyTeam).filter(
+            FantasyTeam.id == team_id,
+            FantasyTeam.user_id == current_user.id
+        ).first()
+        
+        if not team:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fantasy team not found")
+        
+        # Check if team is in any league
+        league_participation = db.query(FantasyLeagueParticipant).filter(
+            FantasyLeagueParticipant.fantasy_team_id == team_id
+        ).first()
+        
+        if league_participation:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Cannot delete team that is participating in a league. Please leave the league first."
+            )
+        
+        # Delete any orphaned LeagueTeam entries (teams not actively in a league)
+        db.query(LeagueTeam).filter(LeagueTeam.fantasy_team_id == team_id).delete()
+        
+        # Delete the team (cascade will delete related FantasyTeamPlayer and TransferHistory records)
+        db.delete(team)
+        db.commit()
+        
+        return {"message": "Team deleted successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting fantasy team: {e}")
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete team")
 
 # Matchday endpoints
 @app.get("/matchdays", response_model=List[MatchdayResponse])
@@ -896,7 +993,8 @@ async def create_league(
             name=league_data.name,
             description=league_data.description,
             is_private=league_data.is_private,
-            max_participants=league_data.max_participants
+            max_participants=league_data.max_participants,
+            team_name=league_data.team_name
         )
         
         return LeagueResponse(
@@ -952,10 +1050,13 @@ async def join_league_by_code(
 ):
     """Join a league using a join code."""
     try:
+        # Extract team_name from join_data if it exists (need to update LeagueJoinRequest model)
+        team_name = getattr(join_data, 'team_name', None)
         result = league_service.join_league_by_code(
             db=db,
             join_code=join_data.join_code,
-            user_id=current_user.id
+            user_id=current_user.id,
+            team_name=team_name
         )
         return LeagueJoinResponse(**result)
         
@@ -968,15 +1069,17 @@ async def join_league_by_code(
 @app.post("/leagues/{league_id}/join", response_model=LeagueJoinResponse)
 async def join_league_by_id(
     league_id: int,
+    team_name: Optional[str] = None,
     current_user: User = Depends(require_authentication),
     db: Session = Depends(get_db)
 ):
-    """Join a public league by ID."""
+    """Join a public league by ID with optional custom team name."""
     try:
         result = league_service.join_league_by_id(
             db=db,
             league_id=league_id,
-            user_id=current_user.id
+            user_id=current_user.id,
+            team_name=team_name
         )
         return LeagueJoinResponse(**result)
         
@@ -1023,6 +1126,116 @@ async def get_league_leaderboard(
     except Exception as e:
         logger.error(f"Error fetching leaderboard: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch leaderboard")
+
+@app.get("/leagues/{league_id}/my-team")
+async def get_my_league_team(
+    league_id: int,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Get the current user's league-specific team details including players and points."""
+    try:
+        from src.models import LeagueTeam, LeagueTeamPlayer, Player
+        
+        # Find the user's participation in this league
+        participant = db.query(FantasyLeagueParticipant).filter(
+            FantasyLeagueParticipant.league_id == league_id,
+            FantasyLeagueParticipant.user_id == current_user.id
+        ).first()
+        
+        if not participant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="You are not a member of this league"
+            )
+        
+        if not participant.league_team_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No league team found"
+            )
+        
+        # Get league team
+        league_team = db.query(LeagueTeam).filter(
+            LeagueTeam.id == participant.league_team_id
+        ).first()
+        
+        if not league_team:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="League team not found"
+            )
+        
+        # Get league team players
+        league_team_players = db.query(LeagueTeamPlayer).filter(
+            LeagueTeamPlayer.league_team_id == league_team.id
+        ).all()
+        
+        players_data = []
+        for ltp in league_team_players:
+            player = db.query(Player).filter(Player.id == ltp.player_id).first()
+            if player:
+                players_data.append({
+                    'id': player.id,
+                    'name': player.name,
+                    'team': player.team,
+                    'position': player.position,
+                    'price': player.price,
+                    'is_captain': ltp.is_captain,
+                    'is_vice_captain': ltp.is_vice_captain,
+                    'position_in_team': ltp.position_in_team
+                })
+        
+        # Get league info
+        league = db.query(FantasyLeague).filter(FantasyLeague.id == league_id).first()
+        league_name = league.name if league else "Unknown League"
+        
+        return {
+            'league_team_id': league_team.id,
+            'league_id': league_team.league_id,
+            'league_name': league_name,
+            'team_name': league_team.team_name,
+            'fantasy_team_id': league_team.fantasy_team_id,
+            'league_points': league_team.league_points,
+            'league_rank': league_team.league_rank,
+            'total_budget': league_team.total_budget,
+            'budget_used': league_team.current_budget_used,
+            'remaining_budget': league_team.remaining_budget,
+            'players': players_data,
+            'player_count': len(players_data)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching league team: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch league team"
+        )
+
+@app.patch("/leagues/{league_id}/my-team")
+async def update_my_league_team_name(
+    league_id: int,
+    team_name: str,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Update the team name for the current user's league-specific team."""
+    try:
+        result = league_service.update_league_team_name(
+            db=db,
+            league_id=league_id,
+            user_id=current_user.id,
+            new_team_name=team_name
+        )
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating league team name: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update team name")
 
 @app.put("/leagues/{league_id}", response_model=LeagueResponse)
 async def update_league(

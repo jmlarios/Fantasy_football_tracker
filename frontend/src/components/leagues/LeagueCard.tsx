@@ -186,11 +186,31 @@ const LeagueCard: React.FC<LeagueCardProps> = ({
         <button
           onClick={(e) => {
             e.stopPropagation();
+            window.location.href = `/leagues/${league.id}/team`;
+          }}
+          style={{
+            flex: '1 1 auto',
+            backgroundColor: '#8b5cf6',
+            color: 'white',
+            border: 'none',
+            padding: '0.75rem 1.25rem',
+            borderRadius: '6px',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            cursor: 'pointer'
+          }}
+        >
+          View My Team
+        </button>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
             onViewLeaderboard(league);
           }}
           style={{
             flex: '1 1 auto',
-            backgroundColor: '#3b82f6',
+            backgroundColor: '#6b7280',
             color: 'white',
             border: 'none',
             padding: '0.75rem 1.25rem',

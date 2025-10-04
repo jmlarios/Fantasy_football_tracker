@@ -6,6 +6,7 @@ import RegisterForm from './components/auth/RegisterForm';
 import FantasyTeamsList from './components/fantasy/FantasyTeamsList';
 import TeamDetailPage from './components/fantasy/TeamDetailPage';
 import { LeagueManager } from './components/leagues';
+import LeagueTeamView from './components/leagues/LeagueTeamView';
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
@@ -737,6 +738,10 @@ const AppContent: React.FC = () => {
       <Route 
         path="/leagues" 
         element={user ? <LeagueManager /> : <Navigate to="/login" />} 
+      />
+      <Route 
+        path="/leagues/:leagueId/team" 
+        element={user ? <LeagueTeamView /> : <Navigate to="/login" />} 
       />
     </Routes>
   );

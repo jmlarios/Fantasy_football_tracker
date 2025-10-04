@@ -280,10 +280,16 @@ class FBrefScraper:
             
             # Process each player row
             for idx, row in df.iterrows():
-                # Skip non-player rows (subtotals, headers, etc.)
+                # Skip non-player rows (subtotals, headers, summary rows like "16 Players", etc.)
                 player_name = self._get_column_value(row, ['Player', 'Unnamed: 0_level_0_Player'], '')
                 
+                # Skip invalid rows: empty, 'Player' header, or summary rows like "16 Players"
                 if not player_name or pd.isna(player_name) or player_name == 'Player':
+                    continue
+                
+                # Skip summary rows that match pattern like "16 Players", "11 Players", etc.
+                if re.match(r'^\d+\s+Players?$', str(player_name).strip(), re.IGNORECASE):
+                    logger.debug(f"Skipping summary row: {player_name}")
                     continue
                 
                 # Extract basic stats using flexible column matching
@@ -349,6 +355,10 @@ class FBrefScraper:
                     if not player_name or pd.isna(player_name) or player_name == 'Player':
                         continue
                     
+                    # Skip summary rows like "16 Players"
+                    if re.match(r'^\d+\s+Players?$', str(player_name).strip(), re.IGNORECASE):
+                        continue
+                    
                     player_name = str(player_name).strip()
                     
                     # Find this player in our stats list and update saves
@@ -395,6 +405,10 @@ class FBrefScraper:
                     player_name = self._get_column_value(row, ['Player', 'Unnamed: 0_level_0_Player'], '')
                     
                     if not player_name or pd.isna(player_name) or player_name == 'Player':
+                        continue
+                    
+                    # Skip summary rows like "16 Players"
+                    if re.match(r'^\d+\s+Players?$', str(player_name).strip(), re.IGNORECASE):
                         continue
                     
                     player_name = str(player_name).strip()
