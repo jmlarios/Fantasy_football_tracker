@@ -17,7 +17,6 @@ class LeagueService:
     
     @staticmethod
     def generate_join_code() -> str:
-        """Generate a unique 8-character join code."""
         return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
     
     @staticmethod
@@ -80,12 +79,10 @@ class LeagueService:
                 players_added.append(f"{player.name} ({position})")
         
         db.flush()
-        logger.info(f"Auto-generated squad for league_team {league_team_id}: {len(players_added)} players")
     
     @staticmethod
     def create_league(db: Session, user_id: int, name: str, description: Optional[str] = None,
                      is_private: bool = False, max_participants: int = 20, team_name: Optional[str] = None) -> FantasyLeague:
-        """Create a new fantasy league."""
         
         # Check if user already has a league with this name
         existing_league = db.query(FantasyLeague).filter(
@@ -126,7 +123,6 @@ class LeagueService:
         # Automatically add creator as participant with custom team name
         LeagueService.join_league_by_id(db, league.id, user_id, team_name)
         
-        logger.info(f"Created league '{name}' by user {user_id}")
         return league
     
     @staticmethod
@@ -203,8 +199,6 @@ class LeagueService:
         db.add(participant)
         db.commit()
         
-        logger.info(f"User {user_id} joined league {league.name}")
-        
         return {
             'league_id': league_id,
             'league_name': league.name,
@@ -247,7 +241,6 @@ class LeagueService:
         db.delete(participant)
         db.commit()
         
-        logger.info(f"User {user_id} left league {league_id}")
         return True
     
     @staticmethod
@@ -390,7 +383,6 @@ class LeagueService:
         db.commit()
         db.refresh(league)
         
-        logger.info(f"League {league_id} updated by user {user_id}")
         return league
     
     @staticmethod
@@ -413,7 +405,6 @@ class LeagueService:
         db.delete(league)
         db.commit()
         
-        logger.info(f"League {league_id} deleted by user {user_id}")
         return True
     
     @staticmethod
@@ -442,8 +433,6 @@ class LeagueService:
         league_team.team_name = new_team_name
         db.commit()
         db.refresh(league_team)
-        
-        logger.info(f"User {user_id} renamed team in league {league_id} to '{new_team_name}'")
         
         return {
             'league_id': league_id,

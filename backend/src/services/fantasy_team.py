@@ -11,7 +11,6 @@ class FantasyTeamService:
     
     @staticmethod
     def create_fantasy_team(db: Session, user_id: int, team_name: str) -> FantasyTeam:
-        """Create a new fantasy team for a user."""
         # Check if user already has a team with this name
         existing_team = db.query(FantasyTeam).filter(
             FantasyTeam.user_id == user_id,
@@ -32,17 +31,14 @@ class FantasyTeamService:
         db.commit()
         db.refresh(fantasy_team)
         
-        logger.info(f"Created fantasy team '{team_name}' for user {user_id}")
         return fantasy_team
     
     @staticmethod
     def get_user_teams(db: Session, user_id: int) -> List[FantasyTeam]:
-        """Get all fantasy teams for a user."""
         return db.query(FantasyTeam).filter(FantasyTeam.user_id == user_id).all()
     
     @staticmethod
     def get_team_with_players(db: Session, team_id: int, user_id: int) -> Optional[Dict]:
-        """Get a fantasy team with all its players."""
         team = db.query(FantasyTeam).filter(
             FantasyTeam.id == team_id,
             FantasyTeam.user_id == user_id
@@ -78,7 +74,6 @@ class FantasyTeamService:
     
     @staticmethod
     def add_player_to_team(db: Session, team_id: int, player_id: int, user_id: int) -> FantasyTeamPlayer:
-        """Add a player to a fantasy team."""
         # Verify team ownership
         team = db.query(FantasyTeam).filter(
             FantasyTeam.id == team_id,
@@ -123,12 +118,10 @@ class FantasyTeamService:
         db.commit()
         db.refresh(team_player)
         
-        logger.info(f"Added player {player.name} to team {team.name}")
         return team_player
     
     @staticmethod
     def remove_player_from_team(db: Session, team_id: int, player_id: int, user_id: int) -> bool:
-        """Remove a player from a fantasy team."""
         # Verify team ownership
         team = db.query(FantasyTeam).filter(
             FantasyTeam.id == team_id,
@@ -150,12 +143,10 @@ class FantasyTeamService:
         db.delete(team_player)
         db.commit()
         
-        logger.info(f"Removed player {player_id} from team {team.name}")
         return True
     
     @staticmethod
     def set_captain(db: Session, team_id: int, player_id: int, user_id: int, is_vice: bool = False) -> bool:
-        """Set a player as captain or vice-captain."""
         # Verify team ownership
         team = db.query(FantasyTeam).filter(
             FantasyTeam.id == team_id,
@@ -182,7 +173,6 @@ class FantasyTeamService:
             
             # Set new vice-captain
             team_player.is_vice_captain = True
-            logger.info(f"Set player {player_id} as vice-captain for team {team.name}")
         else:
             # Clear existing captain
             db.query(FantasyTeamPlayer).filter(
@@ -191,7 +181,6 @@ class FantasyTeamService:
             
             # Set new captain
             team_player.is_captain = True
-            logger.info(f"Set player {player_id} as captain for team {team.name}")
         
         db.commit()
         return True
