@@ -13,19 +13,16 @@ class AuthService:
     
     @staticmethod
     def hash_password(password: str) -> str:
-        """Hash a password using bcrypt."""
         salt = bcrypt.gensalt()
         password_hash = bcrypt.hashpw(password.encode('utf-8'), salt)
         return password_hash.decode('utf-8')
     
     @staticmethod
     def verify_password(password: str, hashed_password: str) -> bool:
-        """Verify a password against its hash."""
         return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
     
     @staticmethod
     def create_user(db: Session, name: str, email: str, password: str) -> User:
-        """Create a new user with hashed password."""
         # Check if email already exists
         existing_user = db.query(User).filter(User.email == email).first()
         if existing_user:
@@ -50,7 +47,6 @@ class AuthService:
     
     @staticmethod
     def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
-        """Authenticate user with email and password."""
         user = db.query(User).filter(User.email == email, User.is_active == True).first()
         
         if not user:
@@ -64,12 +60,10 @@ class AuthService:
     
     @staticmethod
     def get_user_by_id(db: Session, user_id: int) -> Optional[User]:
-        """Get user by ID."""
         return db.query(User).filter(User.id == user_id, User.is_active == True).first()
     
     @staticmethod
     def get_user_by_email(db: Session, email: str) -> Optional[User]:
-        """Get user by email."""
         return db.query(User).filter(User.email == email, User.is_active == True).first()
 
 

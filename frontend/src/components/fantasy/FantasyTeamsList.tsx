@@ -130,12 +130,9 @@ const FantasyTeamsList: React.FC = () => {
   const loadTeams = async () => {
     try {
       setLoading(true);
-      console.log('Loading fantasy teams...');
       const teamsData = await fantasyAPI.getTeams();
-      console.log('Teams loaded:', teamsData);
       setTeams(teamsData);
     } catch (err: any) {
-      console.error('Error loading teams:', err);
       setError('Failed to load fantasy teams: ' + (err.response?.data?.detail || err.message));
     } finally {
       setLoading(false);
@@ -225,7 +222,6 @@ const FantasyTeamsList: React.FC = () => {
         navigate(`/leagues/${leagues[0].league_id}/transfers`);
       }
     } catch (err: any) {
-      console.error('Error fetching team leagues:', err);
       alert('Failed to load leagues for transfers. Please try again.');
     }
   };

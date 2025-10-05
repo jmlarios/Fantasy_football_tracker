@@ -85,7 +85,6 @@ const UserTransferMarket: React.FC<Props> = ({ leagueId, currentTeamId }) => {
       setMoneyOffer('');
       setPlayerExchange(null);
     } catch (err: any) {
-      console.error('Error creating transfer offer:', err);
       alert('Failed to create offer: ' + (err.response?.data?.detail || err.message));
     } finally {
       setSubmitting(false);

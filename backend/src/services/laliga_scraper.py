@@ -1,9 +1,4 @@
-"""
-FBref LaLiga Scraper for Fantasy Football Tracker.
-
-This module scrapes player statistics from FBref.com for LaLiga matches.
-It extracts per-match player stats including goals, assists, cards, saves, and more.
-"""
+"""FBref LaLiga scraper with rate limiting and retry logic."""
 
 import logging
 import time
@@ -21,14 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class FBrefScraper:
-    """
-    Scraper for FBref.com to fetch LaLiga player statistics.
-    
-    This scraper is designed to be respectful:
-    - Uses appropriate User-Agent headers
-    - Implements rate limiting (2-3 seconds between requests)
-    - Includes retry logic for failed requests
-    """
+    """Scraper for FBref.com LaLiga player statistics with rate limiting."""
     
     BASE_URL = "https://fbref.com"
     LALIGA_COMP_ID = "12"  # FBref's competition ID for LaLiga
@@ -57,15 +45,12 @@ class FBrefScraper:
             'Upgrade-Insecure-Requests': '1'
         })
         self.last_request_time = 0
-        
-        logger.info(f"FBref scraper initialized for LaLiga season {season}")
     
     def _rate_limit(self):
         """Implement rate limiting between requests."""
         elapsed = time.time() - self.last_request_time
         if elapsed < self.REQUEST_DELAY:
             sleep_time = self.REQUEST_DELAY - elapsed
-            logger.debug(f"Rate limiting: sleeping for {sleep_time:.2f} seconds")
             time.sleep(sleep_time)
         self.last_request_time = time.time()
     
@@ -83,16 +68,12 @@ class FBrefScraper:
         self._rate_limit()
         
         try:
-            logger.debug(f"Requesting: {url}")
             response = self.session.get(url, timeout=30)
             response.raise_for_status()
             return response
         
         except requests.RequestException as e:
-            logger.warning(f"Request failed for {url}: {e}")
-            
             if retries < self.MAX_RETRIES:
-                logger.info(f"Retrying... (attempt {retries + 1}/{self.MAX_RETRIES})")
                 time.sleep(self.RETRY_DELAY)
                 return self._make_request(url, retries + 1)
             else:
@@ -118,13 +99,10 @@ class FBrefScraper:
         Returns:
             List of match dictionaries containing match info and URLs
         """
-        logger.info(f"Fetching matches for matchday {matchday}")
-        
         schedule_url = self.get_season_schedule_url()
         response = self._make_request(schedule_url)
         
         if not response:
-            logger.error(f"Failed to fetch schedule page")
             return []
         
         soup = BeautifulSoup(response.content, 'lxml')
@@ -132,7 +110,6 @@ class FBrefScraper:
         # Find the schedule table (ID format: sched_YYYY-YYYY_COMP_1)
         schedule_table = soup.find('table', {'id': re.compile(r'^sched_.*')})
         if not schedule_table:
-            logger.error("Could not find schedule table on page")
             return []
         
         matches = []
@@ -176,7 +153,6 @@ class FBrefScraper:
             
             # Skip if no match report available (match not played yet)
             if not match_report_link:
-                logger.debug(f"No match report available yet for {home_team_cell.text.strip()} vs {away_team_cell.text.strip()}")
                 continue
             
             # Parse score if available
@@ -202,9 +178,7 @@ class FBrefScraper:
             }
             
             matches.append(match_info)
-            logger.debug(f"Found match: {match_info['home_team']} vs {match_info['away_team']}")
         
-        logger.info(f"Found {len(matches)} matches for matchday {matchday}")
         return matches
     
     def parse_match_stats(self, match_url: str, match_info: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -218,11 +192,8 @@ class FBrefScraper:
         Returns:
             List of player statistics dictionaries
         """
-        logger.info(f"Parsing match stats from {match_url}")
-        
         response = self._make_request(match_url)
         if not response:
-            logger.error(f"Failed to fetch match page")
             return []
         
         soup = BeautifulSoup(response.content, 'lxml')
@@ -234,7 +205,6 @@ class FBrefScraper:
             team_stats = self._parse_team_player_stats(soup, team_name, match_info)
             all_player_stats.extend(team_stats)
         
-        logger.info(f"Extracted stats for {len(all_player_stats)} players")
         return all_player_stats
     
     def _parse_team_player_stats(self, soup: BeautifulSoup, team_name: str, 
@@ -268,7 +238,6 @@ class FBrefScraper:
             try:
                 df = pd.read_html(StringIO(str(table)))[0]
             except Exception as e:
-                logger.warning(f"Failed to parse table for {team_name}: {e}")
                 continue
             
             # Handle multi-level columns
@@ -289,7 +258,6 @@ class FBrefScraper:
                 
                 # Skip summary rows that match pattern like "16 Players", "11 Players", etc.
                 if re.match(r'^\d+\s+Players?$', str(player_name).strip(), re.IGNORECASE):
-                    logger.debug(f"Skipping summary row: {player_name}")
                     continue
                 
                 # Extract basic stats using flexible column matching
@@ -372,7 +340,7 @@ class FBrefScraper:
                             break
             
             except Exception as e:
-                logger.warning(f"Failed to parse goalkeeper table for {team_name}: {e}")
+                pass
     
     def _add_penalty_stats(self, soup: BeautifulSoup, team_name: str, 
                           player_stats_list: List[Dict[str, Any]]):
@@ -427,7 +395,7 @@ class FBrefScraper:
                                 break
             
             except Exception as e:
-                logger.warning(f"Failed to parse shooting table for {team_name}: {e}")
+                pass
     
     def _calculate_clean_sheets(self, player_stats_list: List[Dict[str, Any]], 
                                match_info: Dict[str, Any], team_name: str):
@@ -517,23 +485,16 @@ class FBrefScraper:
         Returns:
             List of all player statistics for the matchday
         """
-        logger.info(f"Starting scrape for matchday {matchday}")
-        
-        # Get all matches for this matchday
         matches = self.get_matches_for_matchday(matchday)
         
         if not matches:
-            logger.warning(f"No matches found for matchday {matchday}")
             return []
         
         all_player_stats = []
         
         # Scrape each match
         for match in matches:
-            logger.info(f"Processing: {match['home_team']} vs {match['away_team']}")
-            
             player_stats = self.parse_match_stats(match['match_report_url'], match)
             all_player_stats.extend(player_stats)
         
-        logger.info(f"Completed scrape for matchday {matchday}: {len(all_player_stats)} player records")
         return all_player_stats

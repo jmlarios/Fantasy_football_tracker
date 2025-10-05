@@ -74,25 +74,14 @@ async def startup_event():
     Run on application startup.
     Automatically updates matchday statuses based on their start/end dates.
     """
-    logger.info("Application startup: Auto-updating matchday statuses...")
     db = next(get_db())
     try:
         matchday_service = MatchdayStatusService()
         result = matchday_service.update_matchday_status(db)
-        
-        if result['success']:
-            logger.info(f"✓ Matchday status updated successfully:")
-            logger.info(f"  - Active matchday: {result.get('active_matchday', 'None')}")
-            logger.info(f"  - Changes made: {result.get('changes_made', 0)}")
-            logger.info(f"  - Total matchdays: {result.get('total_matchdays', 0)}")
-        else:
-            logger.warning(f"⚠ Matchday status update completed with issues: {result.get('message', 'Unknown')}")
     except Exception as e:
         logger.error(f"✗ Failed to auto-update matchday statuses on startup: {e}")
     finally:
         db.close()
-    
-    logger.info("Application startup complete.")
 
 # Pydantic models
 class UserRegister(BaseModel):
@@ -376,8 +365,6 @@ class BasicFantasyTeamService:
         
         db.add(team_player)
         db.commit()
-        
-        logger.info(f"Added player {player.name} to team {team.name}")
     
     @staticmethod
     def remove_player_from_team(db: Session, team_id: int, player_id: int, user_id: int):
@@ -402,8 +389,6 @@ class BasicFantasyTeamService:
         
         db.delete(team_player)
         db.commit()
-        
-        logger.info(f"Removed player {player_id} from team {team.name}")
     
     @staticmethod
     def set_captain(db: Session, team_id: int, player_id: int, user_id: int, is_vice: bool = False):
@@ -449,7 +434,6 @@ class BasicFantasyTeamService:
         db.commit()
         
         role = "vice-captain" if is_vice else "captain"
-        logger.info(f"Set player {player_id} as {role} for team {team.name}")
 
 fantasy_team_service = BasicFantasyTeamService()
 
@@ -481,7 +465,6 @@ async def register(request: Request, user_data: UserRegister, db: Session = Depe
         )
         
         request.session["user_id"] = user.id
-        logger.info(f"User registered: {user.email}")
         
         return AuthResponse(
             message="User registered successfully",
@@ -497,8 +480,6 @@ async def register(request: Request, user_data: UserRegister, db: Session = Depe
 @app.post("/auth/login", response_model=AuthResponse)
 async def login(request: Request, login_data: UserLogin, db: Session = Depends(get_db)):
     try:
-        logger.info(f"Login attempt for: {login_data.email}")
-        
         user = auth_service.authenticate_user(
             db=db,
             email=login_data.email,
@@ -506,14 +487,12 @@ async def login(request: Request, login_data: UserLogin, db: Session = Depends(g
         )
         
         if not user:
-            logger.warning(f"Failed login for: {login_data.email}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password"
             )
         
         request.session["user_id"] = user.id
-        logger.info(f"User logged in: {user.email}")
         
         return AuthResponse(
             message="Login successful",
@@ -1789,10 +1768,8 @@ async def get_league_teams(
 if __name__ == "__main__":
     import uvicorn
     
-    logger.info("Starting Fantasy Football Tracker API...")
     if not test_database_connection():
         logger.error("Failed to connect to database on startup!")
         sys.exit(1)
     
-    logger.info(f"Starting server on {app_config.HOST}:{app_config.PORT}")
     uvicorn.run("app:app", host=app_config.HOST, port=app_config.PORT, reload=app_config.DEBUG)

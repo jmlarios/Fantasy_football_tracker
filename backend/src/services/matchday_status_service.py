@@ -59,7 +59,6 @@ class MatchdayStatusService:
                 # Check if status needs to be updated
                 if should_be_active and not matchday.is_active:
                     # Activate this matchday
-                    logger.info(f"Activating Matchday {matchday.matchday_number} (current period)")
                     matchday.is_active = True
                     matchday.is_finished = False
                     changes_made += 1
@@ -67,7 +66,6 @@ class MatchdayStatusService:
                     
                 elif not should_be_active and matchday.is_active:
                     # Deactivate this matchday
-                    logger.info(f"Deactivating Matchday {matchday.matchday_number} (period ended)")
                     matchday.is_active = False
                     
                     # Mark as finished if end date has passed
@@ -83,7 +81,6 @@ class MatchdayStatusService:
             # Commit all changes
             if changes_made > 0:
                 db.commit()
-                logger.info(f"Updated {changes_made} matchday statuses")
             
             return {
                 'success': True,

@@ -32,7 +32,6 @@ const LeagueManager: React.FC = () => {
       setLeagues(userLeagues);
     } catch (err: any) {
       setError('Failed to load your leagues');
-      console.error('Error loading leagues:', err);
     } finally {
       setIsLoading(false);
     }

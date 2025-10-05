@@ -49,11 +49,9 @@ def check_existing_data() -> dict:
         existing_tables = inspector.get_table_names()
         
         if not existing_tables:
-            logger.info("No tables exist yet - database is empty")
             return {}
         
         counts = {}
-        # Only check tables that actually exist
         if 'users' in existing_tables:
             counts['users'] = db.query(User).count()
         if 'players' in existing_tables:
@@ -64,10 +62,6 @@ def check_existing_data() -> dict:
             counts['matches'] = db.query(Match).count()
         if 'fantasy_leagues' in existing_tables:
             counts['fantasy_leagues'] = db.query(FantasyLeague).count()
-        
-        logger.info("Current database state:")
-        for table, count in counts.items():
-            logger.info(f"   {table}: {count} records")
             
         return counts
     except Exception as e:
@@ -81,32 +75,19 @@ def main():
     """
     Main function to initialize the database.
     """
-    logger.info("Starting Fantasy Football Tracker Database Initialization")
-    
-    # Test database connection first
-    logger.info("Testing database connection...")
     if not test_database_connection():
         logger.error("Cannot connect to database. Make sure Docker container is running.")
-        logger.info("Try: docker-compose up -d")
         return False
     
-    # Check if tables already exist and have data
-    logger.info("Checking existing database state...")
     existing_counts = check_existing_data()
     
     if any(count > 0 for count in existing_counts.values()):
-        logger.warning("Database already contains data!")
-        response = input("Do you want to continue? This will not delete existing data (y/n): ")
+        response = input("Database already contains data. Continue? This will not delete existing data (y/n): ")
         if response.lower() != 'y':
-            logger.info("Aborted by user")
             return False
     
-    # Initialize database tables
     if not init_database():
         return False
-    
-    logger.info("Database initialization completed successfully!")
-    logger.info("Next step: Add sample data for testing")
 
     return True
 

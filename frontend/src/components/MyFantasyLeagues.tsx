@@ -154,7 +154,6 @@ const MyFantasyLeagues: React.FC = () => {
       // Filter teams that are not in any league (we need to check this via the API or assume all are available)
       setAvailableTeams(teams);
     } catch (error) {
-      console.error('Error loading teams:', error);
       setAvailableTeams([]);
     }
   };
@@ -165,7 +164,6 @@ const MyFantasyLeagues: React.FC = () => {
       const userLeagues = await leagueService.getUserLeagues();
       setLeagues(userLeagues);
     } catch (error) {
-      console.error('Error loading leagues:', error);
       setLeagues([]); // Set empty array on error
     } finally {
       setLoading(false);
@@ -182,7 +180,6 @@ const MyFantasyLeagues: React.FC = () => {
       const leagues = await leagueService.getPublicLeagues();
       setPublicLeagues(leagues);
     } catch (error) {
-      console.error('Error loading public leagues:', error);
       setPublicLeagues([]);
     }
   };

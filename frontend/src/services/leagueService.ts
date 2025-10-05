@@ -65,7 +65,6 @@ const leagueService = {
       const response = await api.post('/leagues', leagueData);
       return response.data;
     } catch (error) {
-      console.error('Error creating league:', error);
       throw new Error('Failed to create league');
     }
   },
@@ -75,7 +74,6 @@ const leagueService = {
       const response = await api.get('/leagues');
       return response.data || [];
     } catch (error) {
-      console.error('Error fetching user leagues:', error);
       // Return empty array instead of throwing to prevent component crashes
       return [];
     }
@@ -86,7 +84,6 @@ const leagueService = {
       const response = await api.get(`/leagues/public?skip=${skip}&limit=${limit}`);
       return response.data || [];
     } catch (error) {
-      console.error('Error fetching public leagues:', error);
       return [];
     }
   },
@@ -99,7 +96,6 @@ const leagueService = {
       });
       return response.data;
     } catch (error) {
-      console.error('Error joining league by code:', error);
       throw new Error('Failed to join league');
     }
   },
@@ -111,7 +107,6 @@ const leagueService = {
       });
       return response.data;
     } catch (error) {
-      console.error('Error joining league by ID:', error);
       throw new Error('Failed to join league');
     }
   },
@@ -121,7 +116,6 @@ const leagueService = {
       const response = await api.delete(`/leagues/${leagueId}/leave`);
       return response.data;
     } catch (error) {
-      console.error('Error leaving league:', error);
       throw new Error('Failed to leave league');
     }
   },
@@ -131,7 +125,6 @@ const leagueService = {
       const response = await api.get(`/leagues/${leagueId}/leaderboard`);
       return response.data;
     } catch (error) {
-      console.error('Error fetching leaderboard:', error);
       throw new Error('Failed to load leaderboard');
     }
   },
@@ -145,7 +138,6 @@ const leagueService = {
       const response = await api.put(`/leagues/${leagueId}`, data);
       return response.data;
     } catch (error) {
-      console.error('Error updating league:', error);
       throw new Error('Failed to update league');
     }
   },
@@ -155,7 +147,6 @@ const leagueService = {
       const response = await api.patch(`/leagues/${leagueId}/my-team`, { team_name: teamName });
       return response.data;
     } catch (error) {
-      console.error('Error updating team name:', error);
       throw new Error('Failed to update team name');
     }
   },
@@ -165,7 +156,6 @@ const leagueService = {
       const response = await api.delete(`/leagues/${leagueId}`);
       return response.data;
     } catch (error) {
-      console.error('Error deleting league:', error);
       throw new Error('Failed to delete league');
     }
   }

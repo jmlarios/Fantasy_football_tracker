@@ -52,7 +52,6 @@ const LeagueTeamView: React.FC = () => {
       const data = await leagueAPI.getMyLeagueTeam(Number(leagueId));
       setTeamData(data);
     } catch (err: any) {
-      console.error('Error loading league team:', err);
       setError(err.response?.data?.detail || 'Failed to load your team for this league');
     } finally {
       setLoading(false);
@@ -69,7 +68,6 @@ const LeagueTeamView: React.FC = () => {
       setNewTeamName('');
       alert('Team name updated successfully!');
     } catch (err: any) {
-      console.error('Error updating team name:', err);
       alert('Failed to update team name. Please try again.');
     }
   };

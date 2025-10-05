@@ -26,7 +26,7 @@ const TransferOffers: React.FC<Props> = ({ leagueId, currentTeamId }) => {
       setReceivedOffers(received.offers || []);
       setSentOffers(sent.offers || []);
     } catch (err: any) {
-      console.error('Error loading offers:', err);
+      // Silently fail
     } finally {
       setLoading(false);
     }

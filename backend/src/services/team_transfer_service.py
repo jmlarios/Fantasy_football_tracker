@@ -311,8 +311,6 @@ class TransferService:
             
             db.commit()
             
-            logger.info(f"Transfer executed: Team {team_id}, In: {player_in_id}, Out: {player_out_id}, Penalty: {penalty_points}")
-            
             return {
                 'success': True,
                 'transfer_id': transfer_record.id,
@@ -372,7 +370,6 @@ class TransferService:
     
     @staticmethod
     def _count_team_positions(team_players: List[FantasyTeamPlayer]) -> Dict[str, int]:
-        """Count players by position in team."""
         counts = {'GK': 0, 'DEF': 0, 'MID': 0, 'FWD': 0}
         for tp in team_players:
             if tp.player and tp.player.position in counts:

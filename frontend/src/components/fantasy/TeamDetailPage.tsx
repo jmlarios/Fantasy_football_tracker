@@ -122,7 +122,6 @@ const TeamDetailPage: React.FC = () => {
       setTeamDetail(data);
     } catch (err: any) {
       setError('Failed to load team details');
-      console.error('Error loading team:', err);
     } finally {
       setLoading(false);
     }

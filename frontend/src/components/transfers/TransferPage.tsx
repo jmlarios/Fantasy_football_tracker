@@ -126,7 +126,6 @@ const TransferPage: React.FC = () => {
       const response = await api.get(`/leagues/${leagueId}/my-team`);
       setCurrentTeamId(response.data.league_team_id);
     } catch (err: any) {
-      console.error('Error loading current team:', err);
       // If user is not in this league, show appropriate message
       if (err.response?.status === 404) {
         setError(err.response?.data?.detail || 'You are not a member of this league');

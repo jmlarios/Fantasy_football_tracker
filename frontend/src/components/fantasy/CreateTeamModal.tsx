@@ -18,12 +18,9 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ onClose, onTeamCreate
     setError('');
     
     try {
-      console.log('Creating team with data:', data);
       const newTeam = await fantasyAPI.createTeam(data);
-      console.log('Team created:', newTeam);
       onTeamCreated(newTeam);
     } catch (err: any) {
-      console.error('Error creating team:', err);
       setError(err.response?.data?.detail || 'Failed to create team');
     } finally {
       setIsLoading(false);

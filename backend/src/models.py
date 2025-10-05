@@ -40,7 +40,7 @@ class Player(Base):
     id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = Column(String(100), nullable=False)
     team: Mapped[str] = Column(String(100), nullable=False)
-    position: Mapped[str] = Column(String(50), nullable=False)  # GK, DEF, MID, FWD
+    position: Mapped[str] = Column(String(50), nullable=False)
     price: Mapped[float] = Column(Float, nullable=False)
     
     # Real stats (cumulative for the season)
@@ -49,7 +49,7 @@ class Player(Base):
     yellow_cards: Mapped[int] = Column(Integer, default=0)
     red_cards: Mapped[int] = Column(Integer, default=0)
     minutes_played: Mapped[int] = Column(Integer, default=0)
-    clean_sheets: Mapped[int] = Column(Integer, default=0)  # For defenders and goalkeepers
+    clean_sheets: Mapped[int] = Column(Integer, default=0)
     
     # Meta information
     is_active: Mapped[bool] = Column(Boolean, default=True)
@@ -76,8 +76,7 @@ class FantasyTeam(Base):
     total_points: Mapped[float] = Column(Float, default=0.0)
     total_budget: Mapped[float] = Column(Float, default=150000000.0)
     
-    # Team composition (could be extended to support formations)
-    max_players: Mapped[int] = Column(Integer, default=11)  # Fixed team size: 11 players
+    max_players: Mapped[int] = Column(Integer, default=11)
     
     created_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = Column(DateTime(timezone=True), onupdate=func.now())
@@ -123,13 +122,13 @@ class FantasyTeamPlayer(Base):
     player_id: Mapped[int] = Column(Integer, ForeignKey('players.id'), nullable=False)
     
     # Position in fantasy team formation
-    position_in_team: Mapped[str] = Column(String(50), nullable=False)  # GK, DEF, MID, FWD
+    position_in_team: Mapped[str] = Column(String(50), nullable=False)
     is_captain: Mapped[bool] = Column(Boolean, default=False)
     is_vice_captain: Mapped[bool] = Column(Boolean, default=False)
     
     # Transfer tracking
     added_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
-    added_for_matchday: Mapped[Optional[int]] = Column(Integer, nullable=True)  # Which matchday was this player added for
+    added_for_matchday: Mapped[Optional[int]] = Column(Integer, nullable=True)
     
     # Relationships
     fantasy_team: Mapped["FantasyTeam"] = relationship("FantasyTeam", back_populates="team_players")
@@ -151,9 +150,9 @@ class Match(Base):
     match_date: Mapped[datetime] = Column(DateTime(timezone=True), nullable=False)
     
     # Match details
-    matchday: Mapped[int] = Column(Integer, nullable=False)  # Gameweek number
+    matchday: Mapped[int] = Column(Integer, nullable=False)
     matchday_id: Mapped[Optional[int]] = Column(Integer, ForeignKey('matchdays.id'), nullable=True)
-    season: Mapped[str] = Column(String(20), nullable=False)  # e.g., "2024-25"
+    season: Mapped[str] = Column(String(20), nullable=False)
     competition: Mapped[str] = Column(String(100), nullable=False)  # e.g., "Premier League", "Champions League"
     
     # Match result
@@ -192,11 +191,11 @@ class MatchPlayerStats(Base):
     red_cards: Mapped[int] = Column(Integer, default=0)
     
     # Additional stats for fantasy scoring
-    saves: Mapped[int] = Column(Integer, default=0)  # For goalkeepers
-    clean_sheet: Mapped[bool] = Column(Boolean, default=False)  # For defenders/goalkeepers
+    saves: Mapped[int] = Column(Integer, default=0)
+    clean_sheet: Mapped[bool] = Column(Boolean, default=False)
     own_goals: Mapped[int] = Column(Integer, default=0)
     penalties_missed: Mapped[int] = Column(Integer, default=0)
-    penalties_saved: Mapped[int] = Column(Integer, default=0)  # For goalkeepers
+    penalties_saved: Mapped[int] = Column(Integer, default=0)
     
     created_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -223,11 +222,11 @@ class FantasyPoints(Base):
     points_from_goals: Mapped[float] = Column(Float, default=0.0)
     points_from_assists: Mapped[float] = Column(Float, default=0.0)
     points_from_clean_sheet: Mapped[float] = Column(Float, default=0.0)
-    points_from_cards: Mapped[float] = Column(Float, default=0.0)  # Usually negative
+    points_from_cards: Mapped[float] = Column(Float, default=0.0)
     points_from_saves: Mapped[float] = Column(Float, default=0.0)
     points_from_minutes: Mapped[float] = Column(Float, default=0.0)
     bonus_points: Mapped[float] = Column(Float, default=0.0)
-    penalty_points: Mapped[float] = Column(Float, default=0.0)  # For missed penalties, own goals, etc.
+    penalty_points: Mapped[float] = Column(Float, default=0.0)
     
     # Total points for this match
     total_points: Mapped[float] = Column(Float, nullable=False)
@@ -387,18 +386,18 @@ class Matchday(Base):
 
     id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
     matchday_number: Mapped[int] = Column(Integer, nullable=False, unique=True)
-    season: Mapped[str] = Column(String(20), nullable=False)  # e.g., "2024-2025"
+    season: Mapped[str] = Column(String(20), nullable=False)
     free_transfers: Mapped[int] = Column(Integer, default=2)
     
     # Matchday period
     start_date: Mapped[datetime] = Column(DateTime(timezone=True), nullable=False)
     end_date: Mapped[datetime] = Column(DateTime(timezone=True), nullable=False)
-    deadline: Mapped[datetime] = Column(DateTime(timezone=True), nullable=False)  # Transfer deadline
+    deadline: Mapped[datetime] = Column(DateTime(timezone=True), nullable=False)
     
     # Status tracking
-    is_active: Mapped[bool] = Column(Boolean, default=False)  # Currently ongoing
-    is_finished: Mapped[bool] = Column(Boolean, default=False)  # All matches completed
-    points_calculated: Mapped[bool] = Column(Boolean, default=False)  # Points have been processed
+    is_active: Mapped[bool] = Column(Boolean, default=False)
+    is_finished: Mapped[bool] = Column(Boolean, default=False)
+    points_calculated: Mapped[bool] = Column(Boolean, default=False)
     
     created_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = Column(DateTime(timezone=True), onupdate=func.now())
@@ -462,9 +461,9 @@ class TransferHistory(Base):
     transfer_type: Mapped[str] = Column(String(20), nullable=False, default='free_agent')
     
     # Transfer details
-    player_in_id: Mapped[Optional[int]] = Column(Integer, ForeignKey('players.id'), nullable=True)  # Player bought
-    player_out_id: Mapped[Optional[int]] = Column(Integer, ForeignKey('players.id'), nullable=True)  # Player sold
-    transfer_cost: Mapped[float] = Column(Float, default=0.0)  # Net cost of transfer
+    player_in_id: Mapped[Optional[int]] = Column(Integer, ForeignKey('players.id'), nullable=True)
+    player_out_id: Mapped[Optional[int]] = Column(Integer, ForeignKey('players.id'), nullable=True)
+    transfer_cost: Mapped[float] = Column(Float, default=0.0)
     penalty_points: Mapped[float] = Column(Float, default=0.0)  # Points deducted for extra transfers
     is_free_transfer: Mapped[bool] = Column(Boolean, default=True)
     
@@ -499,8 +498,8 @@ class TransferOffer(Base):
     
     # League and teams involved
     league_id: Mapped[int] = Column(Integer, ForeignKey('fantasy_leagues.id'), nullable=False)
-    from_team_id: Mapped[int] = Column(Integer, ForeignKey('league_teams.id'), nullable=False)  # League team making the offer
-    to_team_id: Mapped[int] = Column(Integer, ForeignKey('league_teams.id'), nullable=False)  # League team receiving the offer
+    from_team_id: Mapped[int] = Column(Integer, ForeignKey('league_teams.id'), nullable=False)
+    to_team_id: Mapped[int] = Column(Integer, ForeignKey('league_teams.id'), nullable=False)
     
     # Player being requested
     player_id: Mapped[int] = Column(Integer, ForeignKey('players.id'), nullable=False)

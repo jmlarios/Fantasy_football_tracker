@@ -39,7 +39,7 @@ const PlayerBrowser: React.FC<PlayerBrowserProps> = ({
       const teamsData = await fantasyAPI.getTeamsInfo();
       setTeams(teamsData.map(t => t.name));
     } catch (err) {
-      console.error('Error loading teams:', err);
+      // Silently fail
     }
   };
 
@@ -60,7 +60,6 @@ const PlayerBrowser: React.FC<PlayerBrowserProps> = ({
       setPlayers(availablePlayers);
     } catch (err: any) {
       setError('Failed to load players');
-      console.error('Error loading players:', err);
     } finally {
       setLoading(false);
     }

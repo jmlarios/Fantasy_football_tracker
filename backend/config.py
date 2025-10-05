@@ -78,12 +78,8 @@ def test_database_connection() -> bool:
     Returns True if successful, False otherwise.
     """
     try:
-        logger.info(f"Attempting to connect to: {db_config.DATABASE_URL}")
         with engine.connect() as connection:
-            logger.info("Connection established, executing test query...")
             result = connection.execute(text("SELECT 1"))
-            logger.info(f"Query result: {result.fetchone()}")
-            logger.info("Database connection successful")
             return True
     except Exception as e:
         logger.error(f"Database connection failed: {e}")
