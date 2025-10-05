@@ -1,12 +1,4 @@
-"""
-Matchday processing service.
-
-This service handles the complete workflow for processing a finished matchday:
-1. Scrape player statistics from FBref
-2. Save stats to MatchPlayerStats
-3. Calculate fantasy points ONLY for players in fantasy teams
-4. Update fantasy team total points
-"""
+"""Matchday processing service for scraping stats and calculating fantasy points."""
 
 import logging
 from typing import List, Dict, Any, Tuple, Optional
@@ -26,40 +18,14 @@ logger = logging.getLogger(__name__)
 
 
 class MatchdayProcessor:
-    """
-    Process a complete matchday: scrape stats, calculate points, update teams.
-    """
     
     def __init__(self, db: Session, season: str = "2025-2026"):
-        """
-        Initialize the matchday processor.
-        
-        Args:
-            db: Database session
-            season: Season string (e.g., "2025-2026")
-        """
         self.db = db
         self.season = season
         self.scraper = FBrefScraper(season=season)
-        logger.info(f"MatchdayProcessor initialized for season {season}")
     
     def process_matchday(self, matchday: int) -> Dict[str, Any]:
-        """
-        Complete workflow to process a finished matchday.
-        
-        Steps:
-        1. Scrape player stats from FBref
-        2. Save stats to database
-        3. Calculate fantasy points for players in fantasy teams
-        4. Update fantasy team points
-        
-        Args:
-            matchday: Matchday number (1-38)
-            
-        Returns:
-            Dictionary with processing results
-        """
-        logger.info(f"Starting matchday {matchday} processing")
+        """Scrape stats, save to DB, calculate points, update teams."""
         
         results = {
             'matchday': matchday,
@@ -74,7 +40,6 @@ class MatchdayProcessor:
         
         try:
             # Step 1: Scrape player stats
-            logger.info("Step 1: Scraping player statistics...")
             player_stats = self.scraper.scrape_matchday(matchday)
             results['players_scraped'] = len(player_stats)
             
@@ -83,7 +48,6 @@ class MatchdayProcessor:
                 return results
             
             # Step 2: Save stats to database
-            logger.info("Step 2: Saving statistics to database...")
             successful, failed = ScraperDatabaseService.save_matchday_stats(
                 self.db, player_stats
             )
@@ -95,17 +59,12 @@ class MatchdayProcessor:
                 return results
             
             # Step 3: Calculate fantasy points for players in fantasy teams
-            logger.info("Step 3: Calculating fantasy points for fantasy team players...")
             points_calculated = self._calculate_fantasy_points_for_matchday(matchday)
             results['fantasy_points_calculated'] = points_calculated
             
             # Step 4: Update fantasy team totals
-            logger.info("Step 4: Updating fantasy team total points...")
             teams_updated = self._update_fantasy_team_points(matchday)
             results['teams_updated'] = teams_updated
-            
-            logger.info(f"Matchday {matchday} processing completed successfully!")
-            logger.info(f"Results: {successful} stats saved, {points_calculated} fantasy points calculated, {teams_updated} teams updated")
             
         except Exception as e:
             logger.error(f"Error processing matchday {matchday}: {e}", exc_info=True)
@@ -142,8 +101,6 @@ class MatchdayProcessor:
             logger.warning(f"No finished matches found for matchday {matchday}")
             return 0
         
-        logger.info(f"Processing {len(matches)} matches for fantasy points")
-        
         for match in matches:
             # Get all players who played in this match AND are in fantasy teams
             match_stats = self.db.query(MatchPlayerStats).filter(
@@ -176,7 +133,6 @@ class MatchdayProcessor:
                 if self._save_fantasy_points(stat, match, points_breakdown):
                     points_calculated += 1
         
-        logger.info(f"Calculated fantasy points for {points_calculated} player-match records")
         return points_calculated
     
     def _calculate_player_fantasy_points(
@@ -259,7 +215,6 @@ class MatchdayProcessor:
                 existing_points.penalty_points = points_breakdown.get('penalty_points', 0.0)
                 existing_points.total_points = points_breakdown.get('total_points', 0.0)
                 
-                logger.debug(f"Updated fantasy points for player {match_stats.player_id} in match {match.id}")
             else:
                 # Create new record
                 new_points = FantasyPoints(
@@ -277,7 +232,6 @@ class MatchdayProcessor:
                 )
                 
                 self.db.add(new_points)
-                logger.debug(f"Created fantasy points for player {match_stats.player_id} in match {match.id}")
             
             self.db.flush()
             return True
@@ -308,8 +262,6 @@ class MatchdayProcessor:
         # Get all active fantasy teams
         fantasy_teams = self.db.query(FantasyTeam).all()
         
-        logger.info(f"Updating points for {len(fantasy_teams)} fantasy teams")
-        
         for team in fantasy_teams:
             try:
                 # Calculate points for this matchday
@@ -323,23 +275,17 @@ class MatchdayProcessor:
                     LeagueTeam.fantasy_team_id == team.id
                 ).all()
                 
-                logger.info(f"Found {len(league_teams)} league_teams for fantasy_team_id={team.id}")
-                
                 for league_team in league_teams:
                     old_points = league_team.league_points
                     league_team.league_points += matchday_points
-                    logger.info(f"League team '{league_team.team_name}' (ID: {league_team.id}): {old_points} + {matchday_points} = {league_team.league_points} points")
                 
                 self.db.flush()
                 teams_updated += 1
-                
-                logger.debug(f"Fantasy team '{team.name}' (ID: {team.id}): +{matchday_points} points (Total: {team.total_points})")
                 
             except Exception as e:
                 logger.error(f"Error updating team {team.id}: {e}")
         
         self.db.commit()
-        logger.info(f"Updated {teams_updated} fantasy teams and their league entries")
         
         return teams_updated
     
@@ -387,7 +333,6 @@ class MatchdayProcessor:
                 # Apply captain multiplier if this player is captain
                 if team_player.is_captain:
                     player_total *= fantasy_scoring.scoring_rules['captain_multiplier']
-                    logger.debug(f"Captain {team_player.player.name}: {points.total_points} × 2 = {player_total}")
                 
                 total_points += player_total
         

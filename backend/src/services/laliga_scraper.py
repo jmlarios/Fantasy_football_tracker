@@ -1,9 +1,4 @@
-"""
-FBref LaLiga Scraper for Fantasy Football Tracker.
-
-This module scrapes player statistics from FBref.com for LaLiga matches.
-It extracts per-match player stats including goals, assists, cards, saves, and more.
-"""
+"""FBref LaLiga scraper with rate limiting and retry logic."""
 
 import logging
 import time
@@ -21,14 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class FBrefScraper:
-    """
-    Scraper for FBref.com to fetch LaLiga player statistics.
-    
-    This scraper is designed to be respectful:
-    - Uses appropriate User-Agent headers
-    - Implements rate limiting (2-3 seconds between requests)
-    - Includes retry logic for failed requests
-    """
+    """Scraper for FBref.com LaLiga player statistics with rate limiting."""
     
     BASE_URL = "https://fbref.com"
     LALIGA_COMP_ID = "12"  # FBref's competition ID for LaLiga
