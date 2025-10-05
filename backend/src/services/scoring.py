@@ -1,187 +1,9 @@
 """Fantasy scoring system for LaLiga Fantasy Football Tracker."""
 import logging
-from typing import Dict, Any
+from typing import List, Dict, Optional, Any
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
-
-
-class FantasyScoring:
-    """Calculate fantasy points based on player performance."""
-    
-    SCORING_RULES = {
-        'appearance': 1,
-        'minute_threshold': 60,
-        'goals': {
-            'GK': 6,
-            'DEF': 6,
-            'MID': 5,
-            'FWD': 4
-        },
-        'assists': 3,
-        'clean_sheet': {
-            'GK': 4,
-            'DEF': 4,
-            'MID': 1,
-            'FWD': 0
-        },
-        'yellow_card': -1,
-        'red_card': -3,
-        'own_goal': -2,
-        'penalty_missed': -2,
-        'penalty_saved': 5,
-        'saves_per_point': 3,  # Every 3 saves = 1 point
-
-        'captain_multiplier': 2.0
-    }
-    
-    @classmethod
-    def calculate_player_points(cls, player_stats: Dict[str, Any], 
-                              player_position: str, team_clean_sheet: bool = False) -> float:
-        """
-        Calculate fantasy points for a player.
-        
-        Args:
-            player_stats: Player's match statistics
-            player_position: Player position (GK, DEF, MID, FWD)
-            team_clean_sheet: Whether player's team kept a clean sheet
-            
-        Returns:
-            Total fantasy points
-        """
-        points = 0.0
-        
-        try:
-            # Appearance points
-            minutes = player_stats.get('minutes_played', 0)
-            if minutes >= cls.SCORING_RULES['minute_threshold']:
-                points += cls.SCORING_RULES['appearance']
-            elif minutes > 0:
-                points += 0.5
-            
-            # Goals
-            goals = player_stats.get('goals', 0)
-            if goals > 0:
-                points_per_goal = cls.SCORING_RULES['goals'].get(player_position, 4)
-                points += goals * points_per_goal
-            
-            # Assists
-            assists = player_stats.get('assists', 0)
-            points += assists * cls.SCORING_RULES['assists']
-            
-            # Clean sheet
-            if team_clean_sheet:
-                points += cls.SCORING_RULES['clean_sheet'].get(player_position, 0)
-            
-            # Cards
-            yellow_cards = player_stats.get('yellow_cards', 0)
-            red_cards = player_stats.get('red_cards', 0)
-            points += (yellow_cards * cls.SCORING_RULES['yellow_card'] + 
-                      red_cards * cls.SCORING_RULES['red_card'])
-            
-            # Goalkeeper saves
-            if player_position == 'GK':
-                saves = player_stats.get('saves', 0)
-                points += saves / cls.SCORING_RULES['saves_per_point']
-            
-            # Penalties
-            own_goals = player_stats.get('own_goals', 0)
-            penalties_missed = player_stats.get('penalties_missed', 0)
-            penalties_saved = player_stats.get('penalties_saved', 0)
-            
-            points += (own_goals * cls.SCORING_RULES['own_goal'] +
-                      penalties_missed * cls.SCORING_RULES['penalty_missed'] +
-                      penalties_saved * cls.SCORING_RULES['penalty_saved'])
-            
-            logger.debug(f"Calculated {points:.1f} points for {player_position}")
-            
-        except Exception as e:
-            logger.error(f"Error calculating fantasy points: {e}")
-            return 0.0
-        
-        return max(0.0, points)  # Don't allow negative total points
-    
-    @classmethod
-    def get_points_breakdown(cls, player_stats: Dict[str, Any], 
-                            player_position: str, team_clean_sheet: bool = False) -> Dict[str, float]:
-        """
-        Get detailed breakdown of fantasy points for a player.
-        
-        Args:
-            player_stats: Player's match statistics
-            player_position: Player position (GK, DEF, MID, FWD)
-            team_clean_sheet: Whether player's team kept a clean sheet
-            
-        Returns:
-            Dictionary with points breakdown by category
-        """
-        breakdown = {
-            'points_from_minutes': 0.0,
-            'points_from_goals': 0.0,
-            'points_from_assists': 0.0,
-            'points_from_clean_sheet': 0.0,
-            'points_from_saves': 0.0,
-            'points_from_cards': 0.0,
-            'penalty_points': 0.0
-        }
-        
-        try:
-            # Minutes/appearance points
-            minutes = player_stats.get('minutes_played', 0)
-            if minutes >= cls.SCORING_RULES['minute_threshold']:
-                breakdown['points_from_minutes'] = cls.SCORING_RULES['appearance']
-            elif minutes > 0:
-                breakdown['points_from_minutes'] = 0.5
-            
-            # Goals
-            goals = player_stats.get('goals', 0)
-            if goals > 0:
-                points_per_goal = cls.SCORING_RULES['goals'].get(player_position, 4)
-                breakdown['points_from_goals'] = goals * points_per_goal
-            
-            # Assists
-            assists = player_stats.get('assists', 0)
-            breakdown['points_from_assists'] = assists * cls.SCORING_RULES['assists']
-            
-            # Clean sheet
-            if team_clean_sheet:
-                breakdown['points_from_clean_sheet'] = cls.SCORING_RULES['clean_sheet'].get(player_position, 0)
-            
-            # Cards (negative points)
-            yellow_cards = player_stats.get('yellow_cards', 0)
-            red_cards = player_stats.get('red_cards', 0)
-            breakdown['points_from_cards'] = (yellow_cards * cls.SCORING_RULES['yellow_card'] + 
-                                             red_cards * cls.SCORING_RULES['red_card'])
-            
-            # Goalkeeper saves
-            if player_position == 'GK':
-                saves = player_stats.get('saves', 0)
-                breakdown['points_from_saves'] = saves / cls.SCORING_RULES['saves_per_point']
-            
-            # Penalties (negative for missed/own goals, positive for saved)
-            own_goals = player_stats.get('own_goals', 0)
-            penalties_missed = player_stats.get('penalties_missed', 0)
-            penalties_saved = player_stats.get('penalties_saved', 0)
-            
-            breakdown['penalty_points'] = (own_goals * cls.SCORING_RULES['own_goal'] +
-                                          penalties_missed * cls.SCORING_RULES['penalty_missed'] +
-                                          penalties_saved * cls.SCORING_RULES['penalty_saved'])
-            
-        except Exception as e:
-            logger.error(f"Error getting points breakdown: {e}")
-        
-        return breakdown
-    
-    @classmethod
-    def apply_captain_multiplier(cls, base_points: float, is_captain: bool = False) -> float:
-        """Apply captain multiplier (2x) to base points."""
-        return base_points * 2.0 if is_captain else base_points
-
-
-# Global instance
-fantasy_scoring = FantasyScoring()
-
-from typing import List, Dict, Optional
-from sqlalchemy.orm import Session
 
 class FantasyScoring:
     """Calculate fantasy points based on player performance."""
@@ -257,6 +79,24 @@ class FantasyScoring:
             },
             'captain_multiplier': 2.0
         }
+    
+    @staticmethod
+    def _calculate_threshold_points(value: int, threshold: int, points_per_group: float) -> float:
+        """
+        Helper to calculate points based on threshold groups.
+        
+        Args:
+            value: The stat value (e.g., number of saves)
+            threshold: How many units needed for points (e.g., 3 saves)
+            points_per_group: Points awarded per threshold group
+            
+        Returns:
+            Total points from threshold groups
+        """
+        if value >= threshold:
+            groups = value // threshold
+            return groups * points_per_group
+        return 0.0
     
     def calculate_player_points(self, player_stats: Dict, player_position: str, 
                               match_result: Optional[str] = None, goals_conceded: int = 0) -> Dict[str, float]:
@@ -338,11 +178,13 @@ class FantasyScoring:
         
         # Goalkeeper-specific scoring
         if player_position == 'GK':
-            # Saves (every 2 saves = 1 point)
+            # Saves (every 3 saves = 1 point)
             saves = player_stats.get('saves', 0)
-            if saves >= self.scoring_rules['saves']['threshold']:
-                save_groups = saves // self.scoring_rules['saves']['threshold']
-                points_breakdown['saves'] = save_groups * self.scoring_rules['saves']['points']
+            points_breakdown['saves'] = self._calculate_threshold_points(
+                saves, 
+                self.scoring_rules['saves']['threshold'],
+                self.scoring_rules['saves']['points']
+            )
             
             # Penalty saves
             penalty_saves = player_stats.get('penalties_saved', 0)
@@ -364,33 +206,43 @@ class FantasyScoring:
         
         # Defensive bonus stats (every 5 balls recovered = 1 point)
         balls_recovered = player_stats.get('balls_recovered', 0)
-        if balls_recovered >= self.scoring_rules['defensive_bonus']['balls_recovered']['threshold']:
-            recovery_groups = balls_recovered // self.scoring_rules['defensive_bonus']['balls_recovered']['threshold']
-            points_breakdown['balls_recovered'] = recovery_groups * self.scoring_rules['defensive_bonus']['balls_recovered']['points']
+        points_breakdown['balls_recovered'] = self._calculate_threshold_points(
+            balls_recovered,
+            self.scoring_rules['defensive_bonus']['balls_recovered']['threshold'],
+            self.scoring_rules['defensive_bonus']['balls_recovered']['points']
+        )
         
         # Clearances (every 3 clearances = 1 point)
         clearances = player_stats.get('clearances', 0)
-        if clearances >= self.scoring_rules['defensive_bonus']['clearances']['threshold']:
-            clearance_groups = clearances // self.scoring_rules['defensive_bonus']['clearances']['threshold']
-            points_breakdown['clearances'] = clearance_groups * self.scoring_rules['defensive_bonus']['clearances']['points']
+        points_breakdown['clearances'] = self._calculate_threshold_points(
+            clearances,
+            self.scoring_rules['defensive_bonus']['clearances']['threshold'],
+            self.scoring_rules['defensive_bonus']['clearances']['points']
+        )
         
         # Attack bonus stats (every 2 shots on target = 1 point)
         shots_on_target = player_stats.get('shots_on_target', 0)
-        if shots_on_target >= self.scoring_rules['attack_bonus']['shots_on_target']['threshold']:
-            shot_groups = shots_on_target // self.scoring_rules['attack_bonus']['shots_on_target']['threshold']
-            points_breakdown['shots_on_target'] = shot_groups * self.scoring_rules['attack_bonus']['shots_on_target']['points']
+        points_breakdown['shots_on_target'] = self._calculate_threshold_points(
+            shots_on_target,
+            self.scoring_rules['attack_bonus']['shots_on_target']['threshold'],
+            self.scoring_rules['attack_bonus']['shots_on_target']['points']
+        )
         
         # Successful dribbles (every 2 = 1 point)
         successful_dribbles = player_stats.get('successful_dribbles', 0)
-        if successful_dribbles >= self.scoring_rules['attack_bonus']['successful_dribbles']['threshold']:
-            dribble_groups = successful_dribbles // self.scoring_rules['attack_bonus']['successful_dribbles']['threshold']
-            points_breakdown['successful_dribbles'] = dribble_groups * self.scoring_rules['attack_bonus']['successful_dribbles']['points']
+        points_breakdown['successful_dribbles'] = self._calculate_threshold_points(
+            successful_dribbles,
+            self.scoring_rules['attack_bonus']['successful_dribbles']['threshold'],
+            self.scoring_rules['attack_bonus']['successful_dribbles']['points']
+        )
         
         # Entries into the box (every 2 = 1 point)
         entries_into_box = player_stats.get('entries_into_box', 0)
-        if entries_into_box >= self.scoring_rules['attack_bonus']['entries_into_box']['threshold']:
-            entry_groups = entries_into_box // self.scoring_rules['attack_bonus']['entries_into_box']['threshold']
-            points_breakdown['entries_into_box'] = entry_groups * self.scoring_rules['attack_bonus']['entries_into_box']['points']
+        points_breakdown['entries_into_box'] = self._calculate_threshold_points(
+            entries_into_box,
+            self.scoring_rules['attack_bonus']['entries_into_box']['threshold'],
+            self.scoring_rules['attack_bonus']['entries_into_box']['points']
+        )
         
         # Calculate total points
         points_breakdown['total'] = sum(points_breakdown.values())
