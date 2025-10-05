@@ -17,8 +17,10 @@ sys.path.append(str(src_path))
 from config import get_db, test_database_connection, app_config
 from src.models import User, Player, FantasyTeam, FantasyTeamPlayer, Matchday, FantasyLeagueParticipant, FantasyLeague, LeagueTeam
 from src.services.auth import auth_service
-from src.services import transfer_service
+from src.services import team_transfer_service
 from src.services.league_service import league_service
+from src.services.league_transfer_service import FreeAgentTransferService, UserTransferService
+from src.services.matchday_status_service import MatchdayStatusService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -64,6 +66,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Startup event: Auto-update matchday statuses based on dates
+@app.on_event("startup")
+async def startup_event():
+    """
+    Run on application startup.
+    Automatically updates matchday statuses based on their start/end dates.
+    """
+    logger.info("Application startup: Auto-updating matchday statuses...")
+    db = next(get_db())
+    try:
+        matchday_service = MatchdayStatusService()
+        result = matchday_service.update_matchday_status(db)
+        
+        if result['success']:
+            logger.info(f"✓ Matchday status updated successfully:")
+            logger.info(f"  - Active matchday: {result.get('active_matchday', 'None')}")
+            logger.info(f"  - Changes made: {result.get('changes_made', 0)}")
+            logger.info(f"  - Total matchdays: {result.get('total_matchdays', 0)}")
+        else:
+            logger.warning(f"⚠ Matchday status update completed with issues: {result.get('message', 'Unknown')}")
+    except Exception as e:
+        logger.error(f"✗ Failed to auto-update matchday statuses on startup: {e}")
+    finally:
+        db.close()
+    
+    logger.info("Application startup complete.")
 
 # Pydantic models
 class UserRegister(BaseModel):
@@ -211,6 +240,19 @@ class LeaderboardResponse(BaseModel):
     leaderboard: List[LeaderboardEntry]
     user_rank: Optional[int]
 
+# Transfer-related models
+class FreeAgentTransferRequest(BaseModel):
+    player_in_id: int
+    player_out_id: Optional[int] = None
+
+class CreateTransferOfferRequest(BaseModel):
+    to_team_id: int
+    player_id: int
+    offer_type: str  # 'money' or 'player_exchange'
+    money_offered: Optional[float] = 0.0
+    player_offered_id: Optional[int] = None
+    player_out_id: Optional[int] = None  # For money offers: player buyer wants to drop
+
 # Basic fantasy team service
 class BasicFantasyTeamService:
     @staticmethod
@@ -227,7 +269,7 @@ class BasicFantasyTeamService:
             user_id=user_id,
             name=team_name,
             total_points=0.0,
-            total_budget=100000000.0,
+            total_budget=150000000.0,
             max_players=15
         )
         db.add(team)
@@ -268,8 +310,23 @@ class BasicFantasyTeamService:
                     'price': player.price
                 })
         
+        # Calculate total points from league teams instead of fantasy_teams.total_points
+        league_teams = db.query(LeagueTeam).filter(
+            LeagueTeam.fantasy_team_id == team_id
+        ).all()
+        total_league_points = sum(lt.league_points for lt in league_teams)
+        
+        # Create a modified team dict with correct points
+        team_dict = {
+            'id': team.id,
+            'name': team.name,
+            'total_points': total_league_points,  # Use league points sum
+            'max_players': team.max_players,
+            'total_budget': team.total_budget
+        }
+        
         return {
-            'team': team,
+            'team': team_dict,
             'players': players_data,
             'player_count': len(players_data)
         }
@@ -552,10 +609,16 @@ async def get_user_fantasy_teams(
                 FantasyTeamPlayer.fantasy_team_id == team.id
             ).count()
             
+            # Get league points from league_teams table (sum across all leagues)
+            league_teams = db.query(LeagueTeam).filter(
+                LeagueTeam.fantasy_team_id == team.id
+            ).all()
+            total_league_points = sum(lt.league_points for lt in league_teams)
+            
             team_dict = {
                 'id': team.id,
                 'name': team.name,
-                'total_points': team.total_points,
+                'total_points': total_league_points,  # Use league points instead
                 'max_players': team.max_players,
                 'total_budget': team.total_budget,
                 'player_count': player_count
@@ -567,6 +630,46 @@ async def get_user_fantasy_teams(
         logger.error(f"Error fetching fantasy teams: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch fantasy teams")
 
+
+@app.get("/fantasy-teams/{team_id}/leagues")
+async def get_fantasy_team_leagues(
+    team_id: int,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Get all leagues this fantasy team is participating in."""
+    try:
+        # Verify team ownership
+        team = db.query(FantasyTeam).filter(
+            FantasyTeam.id == team_id,
+            FantasyTeam.user_id == current_user.id
+        ).first()
+        
+        if not team:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fantasy team not found")
+        
+        # Get all leagues this team is in
+        league_teams = db.query(LeagueTeam).filter(
+            LeagueTeam.fantasy_team_id == team_id
+        ).all()
+        
+        leagues = []
+        for lt in league_teams:
+            league = db.query(FantasyLeague).filter(FantasyLeague.id == lt.league_id).first()
+            if league:
+                leagues.append({
+                    'league_id': league.id,
+                    'league_name': league.name,
+                    'league_team_id': lt.id
+                })
+        
+        return {'leagues': leagues}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching fantasy team leagues: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch leagues")
 
 @app.get("/fantasy-teams/{team_id}", response_model=FantasyTeamDetailResponse)
 async def get_fantasy_team_detail(
@@ -777,7 +880,9 @@ async def get_all_matchdays(db: Session = Depends(get_db)):
 async def get_current_matchday(db: Session = Depends(get_db)):
     """Get the currently active matchday."""
     try:
-        current_matchday = db.query(Matchday).filter(Matchday.is_active == True).first()
+        # Use the MatchdayStatusService to get current matchday
+        matchday_service = MatchdayStatusService()
+        current_matchday = matchday_service.get_current_matchday(db)
         
         if not current_matchday:
             raise HTTPException(
@@ -881,6 +986,52 @@ async def get_matchday_by_number(matchday_number: int, db: Session = Depends(get
             detail="Failed to fetch matchday"
         )
 
+@app.post("/matchdays/status/update")
+async def update_matchday_statuses(db: Session = Depends(get_db)):
+    """
+    Manually trigger matchday status update.
+    Updates all matchday statuses based on their start_date and end_date.
+    Activates matchdays within their date range, deactivates those outside.
+    """
+    try:
+        matchday_service = MatchdayStatusService()
+        result = matchday_service.update_matchday_status(db)
+        
+        return {
+            "success": result['success'],
+            "message": result['message'],
+            "active_matchday": result.get('active_matchday'),
+            "changes_made": result.get('changes_made', 0),
+            "total_matchdays": result.get('total_matchdays', 0),
+            "details": result
+        }
+        
+    except Exception as e:
+        logger.error(f"Error updating matchday statuses: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update matchday statuses: {str(e)}"
+        )
+
+@app.get("/matchdays/status/info")
+async def get_matchday_status_info(db: Session = Depends(get_db)):
+    """
+    Get detailed information about the current matchday and transfer lock status.
+    Returns comprehensive status including active matchday, transfer lock state, and timing information.
+    """
+    try:
+        matchday_service = MatchdayStatusService()
+        info = matchday_service.get_matchday_info(db)
+        
+        return info
+        
+    except Exception as e:
+        logger.error(f"Error getting matchday status info: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get matchday status info: {str(e)}"
+        )
+
 # Transfer endpoints
 @app.get("/fantasy-teams/{team_id}/transfer-status", response_model=TransferStatusResponse)
 async def get_transfer_status(
@@ -890,7 +1041,7 @@ async def get_transfer_status(
 ):
     """Get transfer status and budget information for a team."""
     try:
-        status = transfer_service.get_transfer_status(db, team_id, current_user.id)
+        status = team_transfer_service.get_transfer_status(db, team_id, current_user.id)
         return TransferStatusResponse(**status)
         
     except ValueError as e:
@@ -914,7 +1065,7 @@ async def validate_transfer(
 ):
     """Validate a proposed transfer without executing it."""
     try:
-        validation = transfer_service.validate_transfer(
+        validation = team_transfer_service.validate_transfer(
             db, team_id, transfer_data.player_in_id, 
             transfer_data.player_out_id, current_user.id
         )
@@ -936,7 +1087,7 @@ async def execute_transfer(
 ):
     """Execute a player transfer."""
     try:
-        result = transfer_service.execute_transfer(
+        result = team_transfer_service.execute_transfer(
             db, team_id, transfer_data.player_in_id, 
             transfer_data.player_out_id, current_user.id
         )
@@ -963,7 +1114,7 @@ async def get_transfer_history(
 ):
     """Get transfer history for a team."""
     try:
-        history = transfer_service.get_transfer_history(db, team_id, current_user.id, limit)
+        history = team_transfer_service.get_transfer_history(db, team_id, current_user.id, limit)
         return {"transfers": history}
         
     except ValueError as e:
@@ -1294,6 +1445,345 @@ async def delete_league(
     except Exception as e:
         logger.error(f"Error deleting league: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to delete league")
+
+# ============= TRANSFER ENDPOINTS =============
+
+@app.get("/leagues/{league_id}/players/available")
+async def get_available_players(
+    league_id: int,
+    position: Optional[str] = None,
+    search: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Get available free agent players for a league."""
+    try:
+        players = FreeAgentTransferService.get_available_players(
+            db=db,
+            league_id=league_id,
+            position=position,
+            search=search,
+            min_price=min_price,
+            max_price=max_price
+        )
+        return {'players': players}
+        
+    except Exception as e:
+        logger.error(f"Error fetching available players: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch available players"
+        )
+
+@app.post("/leagues/{league_id}/teams/{team_id}/transfers/free-agent")
+async def execute_free_agent_transfer(
+    league_id: int,
+    team_id: int,
+    request: FreeAgentTransferRequest,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Execute a free agent transfer."""
+    try:
+        # Get league team and verify ownership
+        league_team = db.query(LeagueTeam).filter(
+            LeagueTeam.id == team_id,
+            LeagueTeam.league_id == league_id
+        ).first()
+        
+        if not league_team:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Team not found"
+            )
+        
+        # Verify user owns this team
+        if league_team.fantasy_team.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't own this team"
+            )
+        
+        # Validate the transfer
+        validation = FreeAgentTransferService.validate_free_transfer(
+            db=db,
+            league_id=league_id,
+            team_id=team_id,
+            player_in_id=request.player_in_id,
+            player_out_id=request.player_out_id
+        )
+        
+        if not validation['is_valid']:
+            return {
+                'success': False,
+                'errors': validation.get('errors', [])
+            }
+        
+        # Execute the transfer
+        result = FreeAgentTransferService.execute_free_transfer(
+            db=db,
+            league_id=league_id,
+            team_id=team_id,
+            player_in_id=request.player_in_id,
+            player_out_id=request.player_out_id,
+            user_id=current_user.id
+        )
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error executing free agent transfer: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@app.post("/leagues/{league_id}/transfers/offers")
+async def create_transfer_offer(
+    league_id: int,
+    request: CreateTransferOfferRequest,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Create a user-to-user transfer offer."""
+    try:
+        # Get the user's team in this league
+        participant = db.query(FantasyLeagueParticipant).filter(
+            FantasyLeagueParticipant.league_id == league_id,
+            FantasyLeagueParticipant.user_id == current_user.id
+        ).first()
+        
+        if not participant or not participant.league_team_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="You are not a member of this league"
+            )
+        
+        result = UserTransferService.create_offer(
+            db=db,
+            league_id=league_id,
+            from_team_id=participant.league_team_id,
+            to_team_id=request.to_team_id,
+            player_id=request.player_id,
+            offer_type=request.offer_type,
+            money_offered=request.money_offered or 0.0,
+            player_offered_id=request.player_offered_id,
+            player_out_id=request.player_out_id,
+            user_id=current_user.id
+        )
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating transfer offer: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@app.get("/leagues/{league_id}/teams/{team_id}/transfers/offers")
+async def get_transfer_offers(
+    league_id: int,
+    team_id: int,
+    direction: str = 'received',  # 'received' or 'sent'
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Get transfer offers for a team (received or sent)."""
+    try:
+        # Verify team ownership
+        league_team = db.query(LeagueTeam).filter(
+            LeagueTeam.id == team_id,
+            LeagueTeam.league_id == league_id
+        ).first()
+        
+        if not league_team:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Team not found"
+            )
+        
+        if league_team.fantasy_team.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't own this team"
+            )
+        
+        offers = UserTransferService.get_team_offers(
+            db=db,
+            league_id=league_id,
+            team_id=team_id,
+            offer_direction=direction
+        )
+        
+        return {'offers': offers}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching transfer offers: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch transfer offers"
+        )
+
+@app.put("/leagues/{league_id}/transfers/offers/{offer_id}/accept")
+async def accept_transfer_offer(
+    league_id: int,
+    offer_id: int,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Accept a transfer offer."""
+    try:
+        result = UserTransferService.accept_offer(
+            db=db,
+            offer_id=offer_id,
+            league_id=league_id,
+            user_id=current_user.id
+        )
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error accepting transfer offer: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@app.put("/leagues/{league_id}/transfers/offers/{offer_id}/reject")
+async def reject_transfer_offer(
+    league_id: int,
+    offer_id: int,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Reject a transfer offer."""
+    try:
+        result = UserTransferService.reject_offer(
+            db=db,
+            offer_id=offer_id,
+            league_id=league_id,
+            user_id=current_user.id
+        )
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error rejecting transfer offer: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@app.delete("/leagues/{league_id}/transfers/offers/{offer_id}")
+async def cancel_transfer_offer(
+    league_id: int,
+    offer_id: int,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Cancel a transfer offer (by the offering team)."""
+    try:
+        result = UserTransferService.cancel_offer(
+            db=db,
+            offer_id=offer_id,
+            league_id=league_id,
+            user_id=current_user.id
+        )
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error cancelling transfer offer: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+@app.get("/leagues/{league_id}/teams")
+async def get_league_teams(
+    league_id: int,
+    current_user: User = Depends(require_authentication),
+    db: Session = Depends(get_db)
+):
+    """Get all teams in a league with their players."""
+    try:
+        from src.models import LeagueTeam, LeagueTeamPlayer, Player
+        
+        # Verify user is in the league
+        participant = db.query(FantasyLeagueParticipant).filter(
+            FantasyLeagueParticipant.league_id == league_id,
+            FantasyLeagueParticipant.user_id == current_user.id
+        ).first()
+        
+        if not participant:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You are not a member of this league"
+            )
+        
+        # Get all teams in the league
+        league_teams = db.query(LeagueTeam).filter(
+            LeagueTeam.league_id == league_id
+        ).all()
+        
+        teams_data = []
+        for team in league_teams:
+            # Get team players
+            team_players = db.query(LeagueTeamPlayer).filter(
+                LeagueTeamPlayer.league_team_id == team.id
+            ).all()
+            
+            players_data = []
+            for ltp in team_players:
+                player = db.query(Player).filter(Player.id == ltp.player_id).first()
+                if player:
+                    players_data.append({
+                        'id': player.id,
+                        'name': player.name,
+                        'team': player.team,
+                        'position': player.position,
+                        'price': player.price
+                    })
+            
+            teams_data.append({
+                'id': team.id,
+                'team_name': team.team_name or team.fantasy_team.name,
+                'user_name': team.fantasy_team.user.name,
+                'user_id': team.fantasy_team.user_id,
+                'league_points': team.league_points,
+                'league_rank': team.league_rank,
+                'is_current_user': team.fantasy_team.user_id == current_user.id,
+                'players': players_data
+            })
+        
+        # Sort by rank
+        teams_data.sort(key=lambda x: x['league_rank'] if x['league_rank'] else 999)
+        
+        return {'teams': teams_data}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching league teams: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch league teams"
+        )
 
 # Run the app
 if __name__ == "__main__":

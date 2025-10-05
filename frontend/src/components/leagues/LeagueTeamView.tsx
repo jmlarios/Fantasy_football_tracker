@@ -211,21 +211,38 @@ const LeagueTeamView: React.FC = () => {
 
       {/* Main Content */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '2rem' }}>
-        <button
-          onClick={() => navigate('/leagues')}
-          style={{
-            backgroundColor: '#6b7280',
-            color: 'white',
-            border: 'none',
-            padding: '0.75rem 1.5rem',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            marginBottom: '1.5rem',
-            fontSize: '1rem'
-          }}
-        >
-          ← Back to Leagues
-        </button>
+        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+          <button
+            onClick={() => navigate('/leagues')}
+            style={{
+              backgroundColor: '#6b7280',
+              color: 'white',
+              border: 'none',
+              padding: '0.75rem 1.5rem',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '1rem'
+            }}
+          >
+            ← Back to Leagues
+          </button>
+          
+          <button
+            onClick={() => navigate(`/leagues/${leagueId}/transfers`)}
+            style={{
+              backgroundColor: '#10b981',
+              color: 'white',
+              border: 'none',
+              padding: '0.75rem 1.5rem',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              fontWeight: 'bold'
+            }}
+          >
+            🔄 Transfers
+          </button>
+        </div>
 
         {loading && (
           <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>

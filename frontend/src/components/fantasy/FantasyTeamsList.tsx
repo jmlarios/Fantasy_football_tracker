@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { fantasyAPI } from '../../services/api';
 import { FantasyTeam } from '../../types/fantasy';
 import CreateTeamModal from './CreateTeamModal';
+import { transferService } from '../../services/transferService';
 
 const Header: React.FC = () => {
   const { logout } = useAuth();
@@ -103,6 +104,7 @@ const Header: React.FC = () => {
 };
 
 const FantasyTeamsList: React.FC = () => {
+  const navigate = useNavigate();
   const [teams, setTeams] = useState<FantasyTeam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -110,6 +112,7 @@ const FantasyTeamsList: React.FC = () => {
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [editingTeam, setEditingTeam] = useState<{ id: number; name: string } | null>(null);
   const [newTeamName, setNewTeamName] = useState('');
+  const [teamLeagues, setTeamLeagues] = useState<Record<number, any[]>>({});
 
   useEffect(() => {
     loadTeams();
@@ -195,6 +198,36 @@ const FantasyTeamsList: React.FC = () => {
     e.preventDefault();
     e.stopPropagation();
     setActiveDropdown(activeDropdown === teamId ? null : teamId);
+  };
+
+  const handleViewTransfers = async (teamId: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    try {
+      // Fetch leagues for this team
+      const response = await transferService.getFantasyTeamLeagues(teamId);
+      const leagues = response.leagues;
+      
+      if (leagues.length === 0) {
+        alert('This team is not in any leagues yet. Join a league first to access transfers!');
+        navigate('/leagues');
+        return;
+      }
+      
+      if (leagues.length === 1) {
+        // If only one league, navigate directly to transfers
+        navigate(`/leagues/${leagues[0].league_id}/transfers`);
+      } else {
+        // Multiple leagues - show a simple alert for now (could be improved with modal)
+        const leagueNames = leagues.map((l: any, i: number) => `${i + 1}. ${l.league_name}`).join('\n');
+        alert(`This team is in multiple leagues:\n\n${leagueNames}\n\nNavigating to the first one...`);
+        navigate(`/leagues/${leagues[0].league_id}/transfers`);
+      }
+    } catch (err: any) {
+      console.error('Error fetching team leagues:', err);
+      alert('Failed to load leagues for transfers. Please try again.');
+    }
   };
 
   if (loading) {
@@ -448,6 +481,33 @@ const FantasyTeamsList: React.FC = () => {
                   </div>
                 </div>
               </Link>
+              
+              {/* Transfers Button */}
+              <button
+                onClick={(e) => handleViewTransfers(team.id, e)}
+                style={{
+                  width: '100%',
+                  marginTop: '0.75rem',
+                  backgroundColor: '#10b981',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '8px',
+                  fontSize: '0.95rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#10b981'}
+              >
+                <span>🔄</span>
+                <span>View Transfers</span>
+              </button>
               
               {/* Dropdown Menu */}
               {activeDropdown === team.id && (

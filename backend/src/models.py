@@ -74,7 +74,7 @@ class FantasyTeam(Base):
     user_id: Mapped[int] = Column(Integer, ForeignKey('users.id'), nullable=False)
     name: Mapped[str] = Column(String(100), nullable=False)
     total_points: Mapped[float] = Column(Float, default=0.0)
-    total_budget: Mapped[float] = Column(Float, default=100000000.0)
+    total_budget: Mapped[float] = Column(Float, default=150000000.0)
     
     # Team composition (could be extended to support formations)
     max_players: Mapped[int] = Column(Integer, default=11)  # Fixed team size: 11 players
@@ -85,7 +85,7 @@ class FantasyTeam(Base):
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="fantasy_teams")
     team_players: Mapped[List["FantasyTeamPlayer"]] = relationship("FantasyTeamPlayer", back_populates="fantasy_team", cascade="all, delete-orphan")
-    transfer_history: Mapped[List["TransferHistory"]] = relationship("TransferHistory", back_populates="fantasy_team", cascade="all, delete-orphan")
+    transfer_history: Mapped[List["TransferHistory"]] = relationship("TransferHistory", foreign_keys="TransferHistory.fantasy_team_id", back_populates="fantasy_team", cascade="all, delete-orphan")
     league_participations: Mapped[List["FantasyLeagueParticipant"]] = relationship("FantasyLeagueParticipant", back_populates="fantasy_team")
 
     def __repr__(self):
@@ -315,8 +315,8 @@ class LeagueTeam(Base):
     league_points: Mapped[float] = Column(Float, default=0.0)
     league_rank: Mapped[Optional[int]] = Column(Integer, nullable=True)
     
-    # Budget tracking (starts at 100M for each league)
-    total_budget: Mapped[float] = Column(Float, default=100000000.0)
+    # Budget tracking (starts at 150M for each league)
+    total_budget: Mapped[float] = Column(Float, default=150000000.0)
     
     created_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = Column(DateTime(timezone=True), onupdate=func.now())
@@ -449,12 +449,17 @@ class Matchday(Base):
 class TransferHistory(Base):
     """
     Track all player transfers for budget and penalty calculations.
+    Supports both free agent transfers and user-to-user transfers.
     """
     __tablename__ = 'transfer_history'
 
     id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
     fantasy_team_id: Mapped[int] = Column(Integer, ForeignKey('fantasy_teams.id'), nullable=False)
-    matchday_id: Mapped[int] = Column(Integer, ForeignKey('matchdays.id'), nullable=False)
+    league_id: Mapped[int] = Column(Integer, ForeignKey('fantasy_leagues.id'), nullable=False)
+    matchday_id: Mapped[Optional[int]] = Column(Integer, ForeignKey('matchdays.id'), nullable=True)
+    
+    # Transfer type: 'free_agent' or 'user_to_user'
+    transfer_type: Mapped[str] = Column(String(20), nullable=False, default='free_agent')
     
     # Transfer details
     player_in_id: Mapped[Optional[int]] = Column(Integer, ForeignKey('players.id'), nullable=True)  # Player bought
@@ -463,14 +468,117 @@ class TransferHistory(Base):
     penalty_points: Mapped[float] = Column(Float, default=0.0)  # Points deducted for extra transfers
     is_free_transfer: Mapped[bool] = Column(Boolean, default=True)
     
+    # For user-to-user transfers
+    seller_team_id: Mapped[Optional[int]] = Column(Integer, ForeignKey('fantasy_teams.id'), nullable=True)
+    transfer_offer_id: Mapped[Optional[int]] = Column(Integer, ForeignKey('transfer_offers.id'), nullable=True)
+    
     # Tracking
     created_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
-    fantasy_team: Mapped["FantasyTeam"] = relationship("FantasyTeam")
+    fantasy_team: Mapped["FantasyTeam"] = relationship("FantasyTeam", foreign_keys=[fantasy_team_id])
+    league: Mapped["FantasyLeague"] = relationship("FantasyLeague")
     matchday: Mapped["Matchday"] = relationship("Matchday")
     player_in: Mapped[Optional["Player"]] = relationship("Player", foreign_keys=[player_in_id])
     player_out: Mapped[Optional["Player"]] = relationship("Player", foreign_keys=[player_out_id])
+    seller_team: Mapped[Optional["FantasyTeam"]] = relationship("FantasyTeam", foreign_keys=[seller_team_id])
+    transfer_offer: Mapped[Optional["TransferOffer"]] = relationship("TransferOffer")
 
     def __repr__(self):
-        return f"<TransferHistory(team_id={self.fantasy_team_id}, matchday={self.matchday_id})>"
+        return f"<TransferHistory(team_id={self.fantasy_team_id}, type='{self.transfer_type}', matchday={self.matchday_id})>"
+
+
+class TransferOffer(Base):
+    """
+    Transfer offers for user-to-user player trades.
+    Allows teams to bid for players owned by other teams in the same league.
+    """
+    __tablename__ = 'transfer_offers'
+
+    id: Mapped[int] = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # League and teams involved
+    league_id: Mapped[int] = Column(Integer, ForeignKey('fantasy_leagues.id'), nullable=False)
+    from_team_id: Mapped[int] = Column(Integer, ForeignKey('league_teams.id'), nullable=False)  # League team making the offer
+    to_team_id: Mapped[int] = Column(Integer, ForeignKey('league_teams.id'), nullable=False)  # League team receiving the offer
+    
+    # Player being requested
+    player_id: Mapped[int] = Column(Integer, ForeignKey('players.id'), nullable=False)
+    
+    # Offer type: 'money' or 'player_exchange'
+    offer_type: Mapped[str] = Column(String(20), nullable=False)
+    
+    # Money offer details
+    money_offered: Mapped[float] = Column(Float, default=0.0)
+    
+    # Player exchange offer details
+    player_offered_id: Mapped[Optional[int]] = Column(Integer, ForeignKey('players.id'), nullable=True)
+    
+    # For money offers: the player the buyer wants to drop from their squad
+    player_out_id: Mapped[Optional[int]] = Column(Integer, ForeignKey('players.id'), nullable=True)
+    
+    # Offer status: 'pending', 'accepted', 'rejected', 'cancelled', 'expired'
+    status: Mapped[str] = Column(String(20), nullable=False, default='pending')
+    
+    # Budget reservation - money is reserved from buyer's budget when offer is created
+    budget_reserved: Mapped[bool] = Column(Boolean, default=False)
+    
+    # Offer expires when matchday starts (transfers lock)
+    expires_at: Mapped[datetime] = Column(DateTime(timezone=True), nullable=False)
+    
+    # Tracking
+    created_at: Mapped[datetime] = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = Column(DateTime(timezone=True), onupdate=func.now())
+    responded_at: Mapped[Optional[datetime]] = Column(DateTime(timezone=True), nullable=True)
+    
+    # Relationships
+    league: Mapped["FantasyLeague"] = relationship("FantasyLeague")
+    from_team: Mapped["LeagueTeam"] = relationship("LeagueTeam", foreign_keys=[from_team_id])
+    to_team: Mapped["LeagueTeam"] = relationship("LeagueTeam", foreign_keys=[to_team_id])
+    player: Mapped["Player"] = relationship("Player", foreign_keys=[player_id])
+    player_offered: Mapped[Optional["Player"]] = relationship("Player", foreign_keys=[player_offered_id])
+    player_out: Mapped[Optional["Player"]] = relationship("Player", foreign_keys=[player_out_id])
+
+    def __repr__(self):
+        return f"<TransferOffer(id={self.id}, from_team={self.from_team_id}, to_team={self.to_team_id}, player={self.player_id}, status='{self.status}')>"
+    
+    @property
+    def is_expired(self) -> bool:
+        """Check if offer has expired."""
+        now = datetime.now(timezone.utc)
+        expires_at = self.expires_at
+        
+        # Handle timezone awareness
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        elif now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        
+        return now >= expires_at and self.status == 'pending'
+    
+    @property
+    def time_until_expiry(self) -> Optional[str]:
+        """Get human-readable time until offer expires."""
+        if self.status != 'pending':
+            return f"Status: {self.status}"
+        
+        if self.is_expired:
+            return "Expired"
+        
+        now = datetime.now(timezone.utc)
+        expires_at = self.expires_at
+        
+        # Handle timezone awareness
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        elif now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
+        
+        delta = expires_at - now
+        
+        if delta.days > 0:
+            return f"{delta.days} days, {delta.seconds // 3600} hours"
+        elif delta.seconds > 3600:
+            return f"{delta.seconds // 3600} hours, {(delta.seconds % 3600) // 60} minutes"
+        else:
+            return f"{delta.seconds // 60} minutes"

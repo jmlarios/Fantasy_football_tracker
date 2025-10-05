@@ -7,6 +7,7 @@ import FantasyTeamsList from './components/fantasy/FantasyTeamsList';
 import TeamDetailPage from './components/fantasy/TeamDetailPage';
 import { LeagueManager } from './components/leagues';
 import LeagueTeamView from './components/leagues/LeagueTeamView';
+import TransferPage from './components/transfers/TransferPage';
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
@@ -742,6 +743,10 @@ const AppContent: React.FC = () => {
       <Route 
         path="/leagues/:leagueId/team" 
         element={user ? <LeagueTeamView /> : <Navigate to="/login" />} 
+      />
+      <Route 
+        path="/leagues/:leagueId/transfers" 
+        element={user ? <TransferPage /> : <Navigate to="/login" />} 
       />
     </Routes>
   );

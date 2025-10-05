@@ -15,7 +15,7 @@ from sqlalchemy import and_
 
 from src.models import (
     Player, Match, MatchPlayerStats, FantasyPoints, 
-    FantasyTeam, FantasyTeamPlayer, Matchday
+    FantasyTeam, FantasyTeamPlayer, Matchday, LeagueTeam
 )
 from src.services.laliga_scraper import FBrefScraper
 from src.services.scraper_db_service import ScraperDatabaseService
@@ -294,7 +294,8 @@ class MatchdayProcessor:
         1. Get all players in the team
         2. Sum their fantasy points for this matchday
         3. Apply captain multiplier if applicable
-        4. Update team's total_points
+        4. Update team's total_points (fantasy_teams table)
+        5. Update league_points for all league_teams linked to this fantasy team
         
         Args:
             matchday: Matchday number
@@ -314,19 +315,31 @@ class MatchdayProcessor:
                 # Calculate points for this matchday
                 matchday_points = self._calculate_team_matchday_points(team, matchday)
                 
-                # Update team's total points
+                # Update team's total points in fantasy_teams table
                 team.total_points += matchday_points
+                
+                # Also update league_points for all league_teams linked to this fantasy team
+                league_teams = self.db.query(LeagueTeam).filter(
+                    LeagueTeam.fantasy_team_id == team.id
+                ).all()
+                
+                logger.info(f"Found {len(league_teams)} league_teams for fantasy_team_id={team.id}")
+                
+                for league_team in league_teams:
+                    old_points = league_team.league_points
+                    league_team.league_points += matchday_points
+                    logger.info(f"League team '{league_team.team_name}' (ID: {league_team.id}): {old_points} + {matchday_points} = {league_team.league_points} points")
                 
                 self.db.flush()
                 teams_updated += 1
                 
-                logger.debug(f"Team '{team.name}' (ID: {team.id}): +{matchday_points} points (Total: {team.total_points})")
+                logger.debug(f"Fantasy team '{team.name}' (ID: {team.id}): +{matchday_points} points (Total: {team.total_points})")
                 
             except Exception as e:
                 logger.error(f"Error updating team {team.id}: {e}")
         
         self.db.commit()
-        logger.info(f"Updated {teams_updated} fantasy teams")
+        logger.info(f"Updated {teams_updated} fantasy teams and their league entries")
         
         return teams_updated
     
