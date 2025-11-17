@@ -6,7 +6,6 @@ from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr
 import logging
 
 # Adding src directory to path
@@ -21,10 +20,41 @@ from src.services import team_transfer_service
 from src.services.league_service import league_service
 from src.services.league_transfer_service import FreeAgentTransferService, UserTransferService
 from src.services.matchday_status_service import MatchdayStatusService
+from src.services.fantasy_team_service import FantasyTeamService
+from src.schemas import (
+    UserRegister,
+    UserLogin,
+    UserResponse,
+    AuthResponse,
+    PlayerResponse,
+    FantasyTeamCreate,
+    FantasyTeamResponse,
+    TeamPlayerResponse,
+    FantasyTeamDetailResponse,
+    AddPlayerRequest,
+    SetCaptainRequest,
+    MatchdayResponse,
+    TransferRequest,
+    TransferStatusResponse,
+    TransferValidationResponse,
+    LeagueCreateRequest,
+    LeagueJoinRequest,
+    LeagueUpdateRequest,
+    LeagueResponse,
+    LeagueJoinResponse,
+    LeaderboardEntry,
+    LeaderboardResponse,
+    FreeAgentTransferRequest,
+    CreateTransferOfferRequest,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def get_fantasy_team_service(db: Session = Depends(get_db)) -> FantasyTeamService:
+    """Provide a fantasy team service instance for each request."""
+    return FantasyTeamService(db)
 
 # Session functions
 def get_session_secret() -> str:
@@ -93,365 +123,6 @@ async def startup_event():
         db.close()
     
     logger.info("Application startup complete.")
-
-# Pydantic models
-class UserRegister(BaseModel):
-    name: str
-    email: EmailStr
-    password: str
-
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-class UserResponse(BaseModel):
-    id: int
-    name: str
-    email: str
-    is_active: bool
-    
-    class Config:
-        from_attributes = True
-
-class AuthResponse(BaseModel):
-    message: str
-    user: UserResponse
-
-class PlayerResponse(BaseModel):
-    id: int
-    name: str
-    team: str
-    position: str
-    goals: int
-    assists: int
-    price: float
-    is_active: bool
-    
-    class Config:
-        from_attributes = True
-
-class FantasyTeamCreate(BaseModel):
-    name: str
-
-class FantasyTeamResponse(BaseModel):
-    id: int
-    name: str
-    total_points: float
-    max_players: int
-    total_budget: float
-    player_count: int = 0  # Number of players currently in the team
-    
-    class Config:
-        from_attributes = True
-
-class TeamPlayerResponse(BaseModel):
-    id: int
-    name: str
-    team: str
-    position: str
-    is_captain: bool
-    is_vice_captain: bool
-    position_in_team: str
-    price: Optional[float] = None
-
-class FantasyTeamDetailResponse(BaseModel):
-    team: FantasyTeamResponse
-    players: List[TeamPlayerResponse]
-    player_count: int
-
-class AddPlayerRequest(BaseModel):
-    player_id: int
-
-class SetCaptainRequest(BaseModel):
-    player_id: int
-    is_vice: bool = False
-
-class MatchdayResponse(BaseModel):
-    id: int
-    matchday_number: int
-    season: str
-    start_date: str
-    end_date: str
-    deadline: str
-    is_active: bool
-    is_finished: bool
-    points_calculated: bool
-    is_transfer_locked: bool
-    time_until_deadline: Optional[str] = None
-
-class TransferRequest(BaseModel):
-    player_in_id: int
-    player_out_id: int
-
-class TransferStatusResponse(BaseModel):
-    available_budget: float
-    used_budget: float
-    remaining_transfers: int
-    status: str
-
-class TransferValidationResponse(BaseModel):
-    valid: bool
-    message: str
-
-class LeagueCreateRequest(BaseModel):
-    name: str
-    description: Optional[str] = None
-    is_private: bool = False
-    max_participants: int = 20
-    team_name: Optional[str] = None  # Team name for the creator's team in this league
-
-class LeagueJoinRequest(BaseModel):
-    join_code: str
-
-class LeagueUpdateRequest(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    max_participants: Optional[int] = None
-
-class LeagueResponse(BaseModel):
-    id: int
-    name: str
-    description: Optional[str]
-    is_private: bool
-    is_creator: bool
-    participants: int
-    max_participants: int
-    created_at: str
-    join_code: Optional[str] = None
-
-class LeagueJoinResponse(BaseModel):
-    league_id: int
-    league_name: str
-    team_id: int
-    team_name: str
-    participants: int
-
-class LeaderboardEntry(BaseModel):
-    user_id: int
-    user_name: str
-    team_id: int
-    team_name: str
-    total_points: float
-    rank: int
-    is_current_user: bool
-
-class LeaderboardResponse(BaseModel):
-    league: Dict
-    leaderboard: List[LeaderboardEntry]
-    user_rank: Optional[int]
-
-# Transfer-related models
-class FreeAgentTransferRequest(BaseModel):
-    player_in_id: int
-    player_out_id: Optional[int] = None
-
-class CreateTransferOfferRequest(BaseModel):
-    to_team_id: int
-    player_id: int
-    offer_type: str  # 'money' or 'player_exchange'
-    money_offered: Optional[float] = 0.0
-    player_offered_id: Optional[int] = None
-    player_out_id: Optional[int] = None  # For money offers: player buyer wants to drop
-
-# Basic fantasy team service
-class BasicFantasyTeamService:
-    @staticmethod
-    def create_fantasy_team(db: Session, user_id: int, team_name: str):
-        existing_team = db.query(FantasyTeam).filter(
-            FantasyTeam.user_id == user_id,
-            FantasyTeam.name == team_name
-        ).first()
-        
-        if existing_team:
-            raise ValueError("Team name already exists")
-        
-        team = FantasyTeam(
-            user_id=user_id,
-            name=team_name,
-            total_points=0.0,
-            total_budget=150000000.0,
-            max_players=15
-        )
-        db.add(team)
-        db.commit()
-        db.refresh(team)
-        return team
-    
-    @staticmethod
-    def get_user_teams(db: Session, user_id: int):
-        return db.query(FantasyTeam).filter(FantasyTeam.user_id == user_id).all()
-    
-    @staticmethod
-    def get_team_with_players(db: Session, team_id: int, user_id: int):
-        team = db.query(FantasyTeam).filter(
-            FantasyTeam.id == team_id,
-            FantasyTeam.user_id == user_id
-        ).first()
-        
-        if not team:
-            return None
-        
-        team_players = db.query(FantasyTeamPlayer).filter(
-            FantasyTeamPlayer.fantasy_team_id == team_id
-        ).all()
-        
-        players_data = []
-        for tp in team_players:
-            player = db.query(Player).filter(Player.id == tp.player_id).first()
-            if player:
-                players_data.append({
-                    'id': player.id,
-                    'name': player.name,
-                    'team': player.team,
-                    'position': player.position,
-                    'is_captain': tp.is_captain,
-                    'is_vice_captain': tp.is_vice_captain,
-                    'position_in_team': tp.position_in_team,
-                    'price': player.price
-                })
-        
-        # Calculate total points from league teams instead of fantasy_teams.total_points
-        league_teams = db.query(LeagueTeam).filter(
-            LeagueTeam.fantasy_team_id == team_id
-        ).all()
-        total_league_points = sum(lt.league_points for lt in league_teams)
-        
-        # Create a modified team dict with correct points
-        team_dict = {
-            'id': team.id,
-            'name': team.name,
-            'total_points': total_league_points,  # Use league points sum
-            'max_players': team.max_players,
-            'total_budget': team.total_budget
-        }
-        
-        return {
-            'team': team_dict,
-            'players': players_data,
-            'player_count': len(players_data)
-        }
-    
-    @staticmethod
-    def add_player_to_team(db: Session, team_id: int, player_id: int, user_id: int):
-        """Add a player to a fantasy team."""
-        # Verify team ownership
-        team = db.query(FantasyTeam).filter(
-            FantasyTeam.id == team_id,
-            FantasyTeam.user_id == user_id
-        ).first()
-        
-        if not team:
-            raise ValueError("Team not found")
-        
-        # Check if player exists
-        player = db.query(Player).filter(Player.id == player_id).first()
-        if not player:
-            raise ValueError("Player not found")
-        
-        # Check if player already in team
-        existing = db.query(FantasyTeamPlayer).filter(
-            FantasyTeamPlayer.fantasy_team_id == team_id,
-            FantasyTeamPlayer.player_id == player_id
-        ).first()
-        
-        if existing:
-            raise ValueError("Player already in team")
-        
-        # Check team size limit
-        current_count = db.query(FantasyTeamPlayer).filter(
-            FantasyTeamPlayer.fantasy_team_id == team_id
-        ).count()
-        
-        if current_count >= team.max_players:
-            raise ValueError(f"Team is full (max {team.max_players} players)")
-        
-        # Add player to team
-        team_player = FantasyTeamPlayer(
-            fantasy_team_id=team_id,
-            player_id=player_id,
-            position_in_team=player.position,
-            is_captain=False,
-            is_vice_captain=False
-        )
-        
-        db.add(team_player)
-        db.commit()
-        
-        logger.info(f"Added player {player.name} to team {team.name}")
-    
-    @staticmethod
-    def remove_player_from_team(db: Session, team_id: int, player_id: int, user_id: int):
-        """Remove a player from a fantasy team."""
-        # Verify team ownership
-        team = db.query(FantasyTeam).filter(
-            FantasyTeam.id == team_id,
-            FantasyTeam.user_id == user_id
-        ).first()
-        
-        if not team:
-            raise ValueError("Team not found")
-        
-        # Find and remove player
-        team_player = db.query(FantasyTeamPlayer).filter(
-            FantasyTeamPlayer.fantasy_team_id == team_id,
-            FantasyTeamPlayer.player_id == player_id
-        ).first()
-        
-        if not team_player:
-            raise ValueError("Player not in team")
-        
-        db.delete(team_player)
-        db.commit()
-        
-        logger.info(f"Removed player {player_id} from team {team.name}")
-    
-    @staticmethod
-    def set_captain(db: Session, team_id: int, player_id: int, user_id: int, is_vice: bool = False):
-        """Set a player as captain or vice-captain."""
-        # Verify team ownership
-        team = db.query(FantasyTeam).filter(
-            FantasyTeam.id == team_id,
-            FantasyTeam.user_id == user_id
-        ).first()
-        
-        if not team:
-            raise ValueError("Team not found")
-        
-        # Check if player is in team
-        team_player = db.query(FantasyTeamPlayer).filter(
-            FantasyTeamPlayer.fantasy_team_id == team_id,
-            FantasyTeamPlayer.player_id == player_id
-        ).first()
-        
-        if not team_player:
-            raise ValueError("Player not in team")
-        
-        if is_vice:
-            # Clear current vice-captain
-            db.query(FantasyTeamPlayer).filter(
-                FantasyTeamPlayer.fantasy_team_id == team_id,
-                FantasyTeamPlayer.is_vice_captain == True
-            ).update({'is_vice_captain': False})
-            
-            # Set new vice-captain
-            team_player.is_vice_captain = True
-            team_player.is_captain = False
-        else:
-            # Clear current captain and vice-captain
-            db.query(FantasyTeamPlayer).filter(
-                FantasyTeamPlayer.fantasy_team_id == team_id
-            ).update({'is_captain': False, 'is_vice_captain': False})
-            
-            # Set new captain
-            team_player.is_captain = True
-            team_player.is_vice_captain = False
-        
-        db.commit()
-        
-        role = "vice-captain" if is_vice else "captain"
-        logger.info(f"Set player {player_id} as {role} for team {team.name}")
-
-fantasy_team_service = BasicFantasyTeamService()
 
 # Endpoints
 @app.get("/")
@@ -580,13 +251,12 @@ async def get_laliga_teams(db: Session = Depends(get_db)):
 async def create_fantasy_team(
     team_data: FantasyTeamCreate,
     current_user: User = Depends(require_authentication),
-    db: Session = Depends(get_db)
+    team_service: FantasyTeamService = Depends(get_fantasy_team_service),
 ):
     try:
-        team = fantasy_team_service.create_fantasy_team(
-            db=db,
+        team = team_service.create_team(
             user_id=current_user.id,
-            team_name=team_data.name
+            team_name=team_data.name,
         )
         return FantasyTeamResponse.model_validate(team)
     except ValueError as e:
@@ -598,34 +268,11 @@ async def create_fantasy_team(
 @app.get("/fantasy-teams", response_model=List[FantasyTeamResponse])
 async def get_user_fantasy_teams(
     current_user: User = Depends(require_authentication),
-    db: Session = Depends(get_db)
+    team_service: FantasyTeamService = Depends(get_fantasy_team_service),
 ):
     try:
-        teams = fantasy_team_service.get_user_teams(db=db, user_id=current_user.id)
-        team_responses = []
-        for team in teams:
-            # Count players in this team
-            player_count = db.query(FantasyTeamPlayer).filter(
-                FantasyTeamPlayer.fantasy_team_id == team.id
-            ).count()
-            
-            # Get league points from league_teams table (sum across all leagues)
-            league_teams = db.query(LeagueTeam).filter(
-                LeagueTeam.fantasy_team_id == team.id
-            ).all()
-            total_league_points = sum(lt.league_points for lt in league_teams)
-            
-            team_dict = {
-                'id': team.id,
-                'name': team.name,
-                'total_points': total_league_points,  # Use league points instead
-                'max_players': team.max_players,
-                'total_budget': team.total_budget,
-                'player_count': player_count
-            }
-            team_responses.append(FantasyTeamResponse(**team_dict))
-        
-        return team_responses
+        summaries = team_service.list_user_teams(current_user.id)
+        return [FantasyTeamResponse(**team) for team in summaries]
     except Exception as e:
         logger.error(f"Error fetching fantasy teams: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to fetch fantasy teams")
@@ -675,13 +322,12 @@ async def get_fantasy_team_leagues(
 async def get_fantasy_team_detail(
     team_id: int,
     current_user: User = Depends(require_authentication),
-    db: Session = Depends(get_db)
+    team_service: FantasyTeamService = Depends(get_fantasy_team_service),
 ):
     try:
-        team_data = fantasy_team_service.get_team_with_players(
-            db=db,
+        team_data = team_service.get_team_detail(
             team_id=team_id,
-            user_id=current_user.id
+            user_id=current_user.id,
         )
         
         if not team_data:
@@ -703,14 +349,13 @@ async def add_player_to_team(
     team_id: int,
     player_data: AddPlayerRequest,
     current_user: User = Depends(require_authentication),
-    db: Session = Depends(get_db)
+    team_service: FantasyTeamService = Depends(get_fantasy_team_service),
 ):
     try:
-        fantasy_team_service.add_player_to_team(
-            db=db,
+        team_service.add_player(
             team_id=team_id,
             player_id=player_data.player_id,
-            user_id=current_user.id
+            user_id=current_user.id,
         )
         return {"message": "Player added to team successfully"}
         
@@ -725,14 +370,13 @@ async def remove_player_from_team(
     team_id: int,
     player_id: int,
     current_user: User = Depends(require_authentication),
-    db: Session = Depends(get_db)
+    team_service: FantasyTeamService = Depends(get_fantasy_team_service),
 ):
     try:
-        fantasy_team_service.remove_player_from_team(
-            db=db,
+        team_service.remove_player(
             team_id=team_id,
             player_id=player_id,
-            user_id=current_user.id
+            user_id=current_user.id,
         )
         return {"message": "Player removed from team successfully"}
         
@@ -747,15 +391,14 @@ async def set_team_captain(
     team_id: int,
     captain_data: SetCaptainRequest,
     current_user: User = Depends(require_authentication),
-    db: Session = Depends(get_db)
+    team_service: FantasyTeamService = Depends(get_fantasy_team_service),
 ):
     try:
-        fantasy_team_service.set_captain(
-            db=db,
+        team_service.set_captain(
             team_id=team_id,
             player_id=captain_data.player_id,
             user_id=current_user.id,
-            is_vice=captain_data.is_vice
+            is_vice=captain_data.is_vice,
         )
         
         role = "vice-captain" if captain_data.is_vice else "captain"

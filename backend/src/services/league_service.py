@@ -1,87 +1,47 @@
 from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
 from src.models import (
-    FantasyLeague, FantasyTeam, User, FantasyLeagueParticipant, LeagueTeam,
-    LeagueTeamPlayer, Player, FantasyTeamPlayer
+    FantasyLeague,
+    User,
+    FantasyLeagueParticipant,
+    LeagueTeam,
 )
 import logging
 import secrets
 import string
 from datetime import datetime, timezone
 
+from src.services.league.team_factory import TeamFactory
+from src.services.league.roster_generator import RosterGenerator
+from src.services.league.membership import LeagueMembershipService
+
 logger = logging.getLogger(__name__)
 
 class LeagueService:
     """Service for managing fantasy leagues and participants."""
     
+    def __init__(
+        self,
+        team_factory: Optional[TeamFactory] = None,
+        roster_generator: Optional[RosterGenerator] = None,
+        membership_service: Optional[LeagueMembershipService] = None
+    ) -> None:
+        self._team_factory = team_factory or TeamFactory(logger)
+        self._roster_generator = roster_generator or RosterGenerator(logger=logger)
+        self._membership = membership_service or LeagueMembershipService(logger)
+        self._logger = logger
+    
     @staticmethod
     def generate_join_code() -> str:
         return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
     
-    @staticmethod
-    def auto_generate_squad(db: Session, league_team_id: int, league_id: int, fantasy_team_id: int) -> None:
-        """
-        Automatically generate a valid starting squad for a league team.
-        Squad composition: 1 GK, 4 DEF, 4 MID, 2 FWD (11 total players)
-        Players are assigned for free (don't affect budget).
-        """
-        squad_requirements = {
-            'GK': 1,
-            'DEF': 4,
-            'MID': 4,
-            'FWD': 2
-        }
-        
-        players_added = []
-        
-        for position, count in squad_requirements.items():
-            # Get available players for this position that aren't already in this league
-            # Use random ordering instead of price-based selection
-            available_players = db.query(Player).filter(
-                Player.position == position,
-                Player.is_active == True,
-                ~Player.id.in_(
-                    db.query(LeagueTeamPlayer.player_id).filter(
-                        LeagueTeamPlayer.league_id == league_id
-                    )
-                )
-            ).order_by(func.random()).limit(count).all()  # Random selection
-            
-            if len(available_players) < count:
-                logger.warning(f"Not enough {position} players available")
-                continue
-            
-            # Add randomly selected players
-            for player in available_players:
-                
-                # Add player to league team (league-specific)
-                league_team_player = LeagueTeamPlayer(
-                    league_team_id=league_team_id,
-                    player_id=player.id,
-                    league_id=league_id,
-                    position_in_team=position,
-                    is_captain=False,
-                    is_vice_captain=False
-                )
-                db.add(league_team_player)
-                
-                # ALSO add player to the general FantasyTeam (so it shows in "My Teams")
-                fantasy_team_player = FantasyTeamPlayer(
-                    fantasy_team_id=fantasy_team_id,
-                    player_id=player.id,
-                    position_in_team=position,
-                    is_captain=False,
-                    is_vice_captain=False
-                )
-                db.add(fantasy_team_player)
-                
-                players_added.append(f"{player.name} ({position})")
-        
-        db.flush()
+    def _get_league(self, db: Session, league_id: int) -> FantasyLeague:
+        league = db.query(FantasyLeague).filter(FantasyLeague.id == league_id).first()
+        if not league:
+            raise ValueError("League not found")
+        return league
     
-    @staticmethod
-    def create_league(db: Session, user_id: int, name: str, description: Optional[str] = None,
+    def create_league(self, db: Session, user_id: int, name: str, description: Optional[str] = None,
                      is_private: bool = False, max_participants: int = 20, team_name: Optional[str] = None) -> FantasyLeague:
         
         # Check if user already has a league with this name
@@ -98,7 +58,7 @@ class LeagueService:
         if is_private:
             # Ensure join code is unique
             while True:
-                join_code = LeagueService.generate_join_code()
+                join_code = self.generate_join_code()
                 existing = db.query(FantasyLeague).filter(
                     FantasyLeague.join_code == join_code
                 ).first()
@@ -121,12 +81,11 @@ class LeagueService:
         db.refresh(league)
         
         # Automatically add creator as participant with custom team name
-        LeagueService.join_league_by_id(db, league.id, user_id, team_name)
+        self.join_league_by_id(db, league.id, user_id, team_name)
         
         return league
     
-    @staticmethod
-    def join_league_by_code(db: Session, join_code: str, user_id: int, team_name: Optional[str] = None) -> Dict:
+    def join_league_by_code(self, db: Session, join_code: str, user_id: int, team_name: Optional[str] = None) -> Dict:
         """Join a league using a join code with optional custom team name."""
         
         # Find league by join code
@@ -137,68 +96,47 @@ class LeagueService:
         if not league:
             raise ValueError("Invalid join code")
         
-        return LeagueService.join_league_by_id(db, league.id, user_id, team_name)
+        return self.join_league_by_id(db, league.id, user_id, team_name)
     
-    @staticmethod
-    def join_league_by_id(db: Session, league_id: int, user_id: int, team_name: Optional[str] = None) -> Dict:
+    def join_league_by_id(self, db: Session, league_id: int, user_id: int, team_name: Optional[str] = None) -> Dict:
         """Join a league by league ID with optional custom team name."""
-        
-        # Get league
-        league = db.query(FantasyLeague).filter(FantasyLeague.id == league_id).first()
-        if not league:
-            raise ValueError("League not found")
-        
-        # Check if user already in league
-        existing_participant = db.query(FantasyLeagueParticipant).filter(
-            FantasyLeagueParticipant.league_id == league_id,
-            FantasyLeagueParticipant.user_id == user_id
-        ).first()
-        
-        if existing_participant:
-            raise ValueError("You are already a member of this league")
-        
-        # Check if league is full
-        current_participants = db.query(FantasyLeagueParticipant).filter(
-            FantasyLeagueParticipant.league_id == league_id
-        ).count()
-        
-        if current_participants >= league.max_participants:
-            raise ValueError("League is full")
-        
-        # Always create a new fantasy team for each league
+
+        league = self._get_league(db, league_id)
+        current_participants = self._membership.ensure_user_can_join(
+            db, league_id, user_id, league.max_participants
+        )
+
         user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise ValueError("User not found")
+
         default_team_name = team_name if team_name else f"{user.name}'s Team"
-        
-        user_team = FantasyTeam(
-            user_id=user_id,
-            name=default_team_name
+        user_team = self._team_factory.create_user_team(db, user_id, default_team_name)
+
+        league_team = self._team_factory.create_league_team(
+            db,
+            league_id,
+            user_team.id,
+            team_name if team_name else user_team.name
         )
-        db.add(user_team)
-        db.flush()
-        
-        # Create league-specific team entry
-        league_team = LeagueTeam(
+
+        self._roster_generator.generate_initial_squad(
+            db,
+            league_team_id=league_team.id,
             league_id=league_id,
-            fantasy_team_id=user_team.id,
-            team_name=team_name if team_name else user_team.name
+            fantasy_team_id=user_team.id
         )
-        db.add(league_team)
-        db.flush()  # Flush to get the league_team.id
-        
-        # Auto-generate a squad for this league team (11 players, free of charge)
-        LeagueService.auto_generate_squad(db, league_team.id, league_id, user_team.id)
-        
-        # Add participant with league_team_id
-        participant = FantasyLeagueParticipant(
-            league_id=league_id,
-            user_id=user_id,
-            fantasy_team_id=user_team.id,
-            league_team_id=league_team.id
+
+        self._team_factory.create_participant(
+            db,
+            league_id,
+            user_id,
+            user_team.id,
+            league_team.id
         )
-        
-        db.add(participant)
+
         db.commit()
-        
+
         return {
             'league_id': league_id,
             'league_name': league.name,
@@ -207,44 +145,20 @@ class LeagueService:
             'participants': current_participants + 1
         }
     
-    @staticmethod
-    def leave_league(db: Session, league_id: int, user_id: int) -> bool:
+    def leave_league(self, db: Session, league_id: int, user_id: int) -> bool:
         """Leave a league."""
-        
-        # Find participant record
-        participant = db.query(FantasyLeagueParticipant).filter(
-            FantasyLeagueParticipant.league_id == league_id,
-            FantasyLeagueParticipant.user_id == user_id
-        ).first()
-        
+
+        league = self._get_league(db, league_id)
+        participant = self._membership.remove_participant(db, league_id, user_id)
+
         if not participant:
             raise ValueError("You are not a member of this league")
-        
-        # Check if user is the creator
-        league = db.query(FantasyLeague).filter(FantasyLeague.id == league_id).first()
-        if league and league.creator_id == user_id:
-            # If creator leaves, transfer ownership or delete league
-            remaining_participants = db.query(FantasyLeagueParticipant).filter(
-                FantasyLeagueParticipant.league_id == league_id,
-                FantasyLeagueParticipant.user_id != user_id
-            ).first()
-            
-            if remaining_participants:
-                # Transfer ownership to next participant
-                league.creator_id = remaining_participants.user_id
-                db.commit()
-            else:
-                # Delete empty league
-                db.delete(league)
-        
-        # Remove participant
-        db.delete(participant)
+
+        self._membership.transfer_ownership_if_needed(db, league, user_id)
         db.commit()
-        
         return True
     
-    @staticmethod
-    def get_user_leagues(db: Session, user_id: int) -> List[Dict]:
+    def get_user_leagues(self, db: Session, user_id: int) -> List[Dict]:
         """Get all leagues a user is participating in."""
         
         participants = db.query(FantasyLeagueParticipant).filter(
@@ -254,9 +168,7 @@ class LeagueService:
         leagues = []
         for participant in participants:
             league = participant.league
-            participant_count = db.query(FantasyLeagueParticipant).filter(
-                FantasyLeagueParticipant.league_id == league.id
-            ).count()
+            participant_count = self._membership.count_participants(db, league.id)
             
             leagues.append({
                 'id': league.id,
@@ -272,8 +184,7 @@ class LeagueService:
         
         return leagues
     
-    @staticmethod
-    def get_public_leagues(db: Session, skip: int = 0, limit: int = 20) -> List[Dict]:
+    def get_public_leagues(self, db: Session, skip: int = 0, limit: int = 20) -> List[Dict]:
         """Get public leagues that users can join."""
         
         leagues = db.query(FantasyLeague).filter(
@@ -282,9 +193,7 @@ class LeagueService:
         
         public_leagues = []
         for league in leagues:
-            participant_count = db.query(FantasyLeagueParticipant).filter(
-                FantasyLeagueParticipant.league_id == league.id
-            ).count()
+            participant_count = self._membership.count_participants(db, league.id)
             
             if participant_count < league.max_participants:  # Only show non-full leagues
                 public_leagues.append({
@@ -298,8 +207,7 @@ class LeagueService:
         
         return public_leagues
     
-    @staticmethod
-    def get_league_leaderboard(db: Session, league_id: int, user_id: int) -> Dict:
+    def get_league_leaderboard(self, db: Session, league_id: int, user_id: int) -> Dict:
         """Get league leaderboard with team rankings."""
         
         # Verify user is in league
@@ -312,7 +220,7 @@ class LeagueService:
             raise ValueError("You are not a member of this league")
         
         # Get league info
-        league = db.query(FantasyLeague).filter(FantasyLeague.id == league_id).first()
+        league = self._get_league(db, league_id)
         
         # Get all participants with their teams and points
         participants = db.query(FantasyLeagueParticipant).filter(
@@ -352,15 +260,12 @@ class LeagueService:
             'user_rank': next((entry['rank'] for entry in leaderboard if entry['is_current_user']), None)
         }
     
-    @staticmethod
-    def update_league(db: Session, league_id: int, user_id: int, 
+    def update_league(self, db: Session, league_id: int, user_id: int, 
                      name: Optional[str] = None, description: Optional[str] = None,
                      max_participants: Optional[int] = None) -> FantasyLeague:
         """Update league settings (creator only)."""
         
-        league = db.query(FantasyLeague).filter(FantasyLeague.id == league_id).first()
-        if not league:
-            raise ValueError("League not found")
+        league = self._get_league(db, league_id)
         
         if league.creator_id != user_id:
             raise ValueError("Only league creator can update settings")
@@ -371,9 +276,7 @@ class LeagueService:
         if description is not None:
             league.description = description
         if max_participants is not None:
-            current_participants = db.query(FantasyLeagueParticipant).filter(
-                FantasyLeagueParticipant.league_id == league_id
-            ).count()
+            current_participants = self._membership.count_participants(db, league_id)
             
             if max_participants < current_participants:
                 raise ValueError(f"Cannot reduce max participants below current count ({current_participants})")
@@ -385,13 +288,10 @@ class LeagueService:
         
         return league
     
-    @staticmethod
-    def delete_league(db: Session, league_id: int, user_id: int) -> bool:
+    def delete_league(self, db: Session, league_id: int, user_id: int) -> bool:
         """Delete a league (creator only)."""
         
-        league = db.query(FantasyLeague).filter(FantasyLeague.id == league_id).first()
-        if not league:
-            raise ValueError("League not found")
+        league = self._get_league(db, league_id)
         
         if league.creator_id != user_id:
             raise ValueError("Only league creator can delete the league")
@@ -407,8 +307,7 @@ class LeagueService:
         
         return True
     
-    @staticmethod
-    def update_league_team_name(db: Session, league_id: int, user_id: int, new_team_name: str) -> Dict:
+    def update_league_team_name(self, db: Session, league_id: int, user_id: int, new_team_name: str) -> Dict:
         """Update the team name for a specific league."""
         
         # Verify user is in the league
