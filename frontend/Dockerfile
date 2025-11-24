@@ -1,6 +1,9 @@
 # Build stage
 FROM node:18-alpine as build
 
+ARG VITE_API_BASE_URL=/api
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+
 WORKDIR /app
 
 # Copy package files

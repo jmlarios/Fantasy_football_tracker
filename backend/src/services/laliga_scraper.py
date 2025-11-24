@@ -9,6 +9,7 @@ from urllib.parse import urljoin
 from io import StringIO
 
 import requests
+import cloudscraper
 from bs4 import BeautifulSoup
 import pandas as pd
 
@@ -34,7 +35,19 @@ class FBrefScraper:
             season: Season string in format "YYYY-YYYY" (e.g., "2024-2025")
         """
         self.season = season
-        self.session = requests.Session()
+        try:
+            # cloudscraper helps bypass Cloudflare blocks that return HTTP 403
+            self.session = cloudscraper.create_scraper(
+                browser={
+                    "browser": "chrome",
+                    "platform": "windows",
+                    "mobile": False,
+                }
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("cloudscraper init failed (%s), falling back to requests", exc)
+            self.session = requests.Session()
+
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -42,7 +55,8 @@ class FBrefScraper:
             'Accept-Encoding': 'gzip, deflate, br',
             'DNT': '1',
             'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1'
+            'Upgrade-Insecure-Requests': '1',
+            'Referer': 'https://fbref.com/',
         })
         self.last_request_time = 0
         

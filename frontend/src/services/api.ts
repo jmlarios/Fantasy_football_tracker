@@ -6,11 +6,18 @@ import {
 } from '../types/fantasy';
 
 const resolveBaseUrl = (): string => {
-  const meta = import.meta as unknown as { env?: Record<string, string | undefined> };
-  return meta.env?.VITE_API_BASE_URL ?? 'http://localhost:5000';
+  const envBase = import.meta.env?.VITE_API_BASE_URL;
+  if (typeof envBase === 'string' && envBase.trim().length > 0) {
+    return envBase.trim();
+  }
+  return '/api';
 };
 
-const API_BASE_URL = resolveBaseUrl();
+let API_BASE_URL = resolveBaseUrl();
+
+if (import.meta.env?.DEV && API_BASE_URL === '/api') {
+  API_BASE_URL = 'http://localhost:5000';
+}
 
 const api = axios.create({
   baseURL: API_BASE_URL,
