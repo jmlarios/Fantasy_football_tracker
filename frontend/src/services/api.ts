@@ -5,7 +5,19 @@ import {
   AddPlayerRequest, SetCaptainRequest, TeamValidation 
 } from '../types/fantasy';
 
-const API_BASE_URL = 'http://localhost:5000';
+const resolveBaseUrl = (): string => {
+  const envBase = import.meta.env?.VITE_API_BASE_URL;
+  if (typeof envBase === 'string' && envBase.trim().length > 0) {
+    return envBase.trim();
+  }
+  return '/api';
+};
+
+let API_BASE_URL = resolveBaseUrl();
+
+if (import.meta.env?.DEV && API_BASE_URL === '/api') {
+  API_BASE_URL = 'http://localhost:5000';
+}
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -14,6 +26,25 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+const resolveApiErrorMessage = (error: unknown, fallback: string): string => {
+  if (axios.isAxiosError(error)) {
+    const detail = (error.response?.data as { detail?: unknown } | undefined)?.detail;
+    if (typeof detail === 'string' && detail.trim().length > 0) {
+      return detail;
+    }
+    if (typeof error.message === 'string' && error.message.trim().length > 0) {
+      return error.message;
+    }
+  }
+  return fallback;
+};
+
+export const throwApiError = (error: unknown, fallback: string): never => {
+  const message = resolveApiErrorMessage(error, fallback);
+  console.error(fallback, error);
+  throw new Error(message);
+};
 
 export const authAPI = {
   login: (data: LoginRequest): Promise<AuthResponse> =>
