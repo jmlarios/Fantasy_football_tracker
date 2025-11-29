@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { transferService, Player } from '../../services/transferService';
+import { leagueAPI } from '../../services/api';
 
 interface FreeAgentTransferProps {
   leagueId: number;
@@ -28,10 +29,7 @@ const FreeAgentTransfer: React.FC<FreeAgentTransferProps> = ({ leagueId, current
     setLoading(true);
     setError(null);
     try {
-      const myTeamResponse = await fetch(`http://localhost:5000/leagues/${leagueId}/my-team`, {
-        credentials: 'include',
-      });
-      const myTeamData = await myTeamResponse.json();
+      const myTeamData = await leagueAPI.getMyLeagueTeam(leagueId);
       setMyPlayers(myTeamData.players || []);
 
       await loadAvailablePlayers();
