@@ -1,7 +1,7 @@
 version: '3.8'
 services:
   backend:
-    image: jmfantasyfootball.azurecr.io/backend:v4
+    image: jmfantasyfootball.azurecr.io/backend:v5
     restart: always
     environment:
       DATABASE_URL: ${DATABASE_URL}
@@ -10,7 +10,7 @@ services:
       - "5000:5000"
 
   frontend:
-    image: jmfantasyfootball.azurecr.io/frontend:v4
+    image: jmfantasyfootball.azurecr.io/frontend:v5
     restart: always
     depends_on:
       - backend
