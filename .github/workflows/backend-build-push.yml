@@ -26,4 +26,4 @@ jobs:
           context: backend
           file: backend/Dockerfile
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v4
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v5

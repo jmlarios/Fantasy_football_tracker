@@ -7,7 +7,7 @@ on:
 env:
   REGISTRY: jmfantasyfootball.azurecr.io
   IMAGE_NAME: frontend
-  IMAGE_TAG: v4
+  IMAGE_TAG: v5
 
 jobs:
   build-and-push:
