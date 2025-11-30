@@ -1,9 +1,11 @@
 import sys
 import os
+import time
 from pathlib import Path
 from typing import List, Optional, Dict
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy.orm import Session
 import logging
@@ -21,6 +23,7 @@ from src.services.league_service import league_service
 from src.services.league_transfer_service import FreeAgentTransferService, UserTransferService
 from src.services.matchday_status_service import MatchdayStatusService
 from src.services.fantasy_team_service import FantasyTeamService
+from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from src.schemas import (
     UserRegister,
     UserLogin,
@@ -51,6 +54,26 @@ from src.schemas import (
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+METRICS_EXCLUDED_PATHS = {"/metrics"}
+
+REQUEST_COUNT = Counter(
+    "http_requests_total",
+    "Total HTTP requests processed",
+    labelnames=("method", "endpoint", "http_status")
+)
+
+REQUEST_LATENCY = Histogram(
+    "http_request_latency_seconds",
+    "Request latency in seconds",
+    labelnames=("method", "endpoint")
+)
+
+REQUEST_ERRORS = Counter(
+    "http_request_errors_total",
+    "Total HTTP requests resulting in server errors",
+    labelnames=("method", "endpoint")
+)
 
 def get_fantasy_team_service(db: Session = Depends(get_db)) -> FantasyTeamService:
     """Provide a fantasy team service instance for each request."""
@@ -101,6 +124,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def prometheus_middleware(request: Request, call_next):
+    """Record basic request metrics for Prometheus scraping."""
+    if request.url.path in METRICS_EXCLUDED_PATHS:
+        return await call_next(request)
+
+    route = request.scope.get("route")
+    endpoint = getattr(route, "path", request.url.path)
+    method = request.method
+    start_time = time.perf_counter()
+
+    try:
+        response = await call_next(request)
+    except Exception:
+        REQUEST_ERRORS.labels(method, endpoint).inc()
+        raise
+
+    elapsed = time.perf_counter() - start_time
+    status_code = str(response.status_code)
+
+    REQUEST_COUNT.labels(method, endpoint, status_code).inc()
+    REQUEST_LATENCY.labels(method, endpoint).observe(elapsed)
+
+    if response.status_code >= 500:
+        REQUEST_ERRORS.labels(method, endpoint).inc()
+
+    response.headers["X-Process-Time"] = f"{elapsed:.6f}"
+    return response
+
 # Startup event: Auto-update matchday statuses based on dates
 @app.on_event("startup")
 async def startup_event():
@@ -144,6 +196,12 @@ async def health_check():
         "status": "healthy" if db_connected else "unhealthy",
         "database_connected": db_connected
     }
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics_endpoint():
+    """Expose Prometheus metrics for scraping."""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 @app.post("/auth/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(request: Request, user_data: UserRegister, db: Session = Depends(get_db)):
