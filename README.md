@@ -69,7 +69,7 @@ A full-stack fantasy football application for managing LaLiga fantasy leagues, t
 - **Pydantic** - Data validation
 - **BeautifulSoup4** - Web scraping for player stats
 - **bcrypt** - Password hashing
-- **pytest** - Testing framework (64 tests, 78% coverage)
+- **pytest** - Testing framework (66 tests, 88% coverage)
 
 ### Frontend
 
@@ -284,20 +284,23 @@ The API documentation is automatically generated and available at http://localho
 ### Running Tests in Docker
 
 ```bash
-# Run all tests
-docker-compose exec backend pytest
+# Run all tests (inside project venv)
+cd backend && ..\.venv\Scripts\python.exe -m pytest
 
 # Run with verbose output
-docker-compose exec backend pytest -v
+cd backend && ..\.venv\Scripts\python.exe -m pytest -v
 
 # Run specific test file
-docker-compose exec backend pytest tests/test_auth.py
+cd backend && ..\.venv\Scripts\python.exe -m pytest tests/test_auth.py
 
 # Run with coverage report
-docker-compose exec backend pytest --cov=src
+cd backend && ..\.venv\Scripts\python.exe -m pytest
 ```
 
-**Current Test Coverage: 78.47%** (64/64 tests passing)
+**Current Test Coverage: 88.46%** (66 tests)
+
+- Coverage XML artifact: `reports/testing/backend-coverage.xml`
+- Summary notes: `reports/testing/coverage-summary.md`
 
 ### Test Categories
 
