@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: "fantasy-backend"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          # Use the service name when running with docker-compose
+          - backend:5000
+          # Or uncomment the next line to scrape a locally running backend
+          # - host.docker.internal:5000
