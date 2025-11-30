@@ -7,10 +7,14 @@ A full-stack fantasy football application for managing LaLiga fantasy leagues, t
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Quick Start with Docker](#quick-start-with-docker)
+- [Local Development](#local-development)
+- [Testing](#testing)
+- [CI/CD Pipeline](#cicd-pipeline)
+- [Deployment](#deployment)
+- [Health & Monitoring](#health--monitoring)
 - [Project Structure](#project-structure)
 - [API Documentation](#api-documentation)
 - [Fantasy Points System](#fantasy-points-system)
-- [Testing](#testing)
 
 ## Features
 
@@ -139,74 +143,72 @@ Fantasy_football_tracker/
 ├── backend/
 │   ├── app.py                      # FastAPI application entry point
 │   ├── config.py                   # Configuration management
-│   ├── db_init.py                  # Database initialization
+│   ├── db_init.py                  # Database bootstrap script
 │   ├── requirements.txt            # Python dependencies
-│   ├── pytest.ini                  # Test configuration
-│   ├── Dockerfile                  # Backend container config
+│   ├── pytest.ini / .coveragerc    # Test + coverage settings
+│   ├── Dockerfile                  # Backend container build
+│   ├── db_scripts/                 # One-off maintenance scripts
+│   ├── scripts/
+│   │   └── update_player_stats_from_matchdays.py
 │   ├── src/
-│   │   ├── models.py               # SQLAlchemy database models
-│   │   ├── routes.py               # API endpoints
+│   │   ├── models.py               # SQLAlchemy ORM models
+│   │   ├── routes.py               # Router wiring
 │   │   ├── middleware/
-│   │   │   └── session.py          # Session management
+│   │   │   └── session.py          # Session handling
 │   │   └── services/
-│   │       ├── auth.py             # Authentication service
-│   │       ├── fantasy_team.py     # Team management
-│   │       ├── league_service.py   # League operations
-│   │       ├── scoring.py          # Points calculation
-│   │       ├── laliga_scraper.py   # FBref web scraper
-│   │       ├── matchday_processor.py # Matchday workflow
-│   │       └── team_transfer_service.py # Transfer system
-│   ├── tests/
-│   │   ├── conftest.py             # Test fixtures
-│   │   ├── test_auth.py            # Auth tests
-│   │   ├── test_models.py          # Model tests
-│   │   ├── test_scoring.py         # Scoring tests
-│   │   └── test_scoring_comprehensive.py
-│   └── scripts/
-│       └── update_player_stats_from_matchdays.py
+│   │       ├── auth.py
+│   │       ├── fantasy_team.py
+│   │       ├── laliga_scraper.py
+│   │       ├── league_service.py
+│   │       ├── matchday_initializer.py
+│   │       ├── scoring.py
+│   │       └── transfer_service.py
+│   └── tests/
+│       ├── conftest.py
+│       ├── test_auth.py
+│       ├── test_models.py
+│       ├── test_scoring.py
+│       └── test_scoring_comprehensive.py
 ├── frontend/
-│   ├── src/
-│   │   ├── App.tsx                 # Main app component
-│   │   ├── main.tsx                # Entry point
-│   │   ├── components/
-│   │   │   ├── Dashboard.tsx       # User dashboard
-│   │   │   ├── MyFantasyLeagues.tsx # League list
-│   │   │   ├── auth/
-│   │   │   │   ├── LoginForm.tsx
-│   │   │   │   └── RegisterForm.tsx
-│   │   │   ├── fantasy/
-│   │   │   │   ├── CreateTeamModal.tsx
-│   │   │   │   ├── FantasyTeamsList.tsx
-│   │   │   │   ├── PlayerBrowser.tsx
-│   │   │   │   └── TeamDetailPage.tsx
-│   │   │   ├── leagues/
-│   │   │   │   ├── LeagueManager.tsx
-│   │   │   │   └── LeagueTeamView.tsx
-│   │   │   └── transfers/
-│   │   │       ├── TransferPage.tsx
-│   │   │       ├── UserTransferMarket.tsx
-│   │   │       └── TransferOffers.tsx
-│   │   ├── contexts/
-│   │   │   └── AuthContext.tsx     # Auth state management
-│   │   ├── services/
-│   │   │   ├── api.ts              # API client
-│   │   │   ├── authService.ts      # Auth API calls
-│   │   │   └── leagueService.ts    # League API calls
-│   │   └── types/
-│   │       ├── auth.ts             # Auth types
-│   │       └── fantasy.ts          # Fantasy types
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── nginx.conf                  # Nginx configuration
-│   └── Dockerfile                  # Frontend container config
-├── docker-compose.yml              # Multi-container setup
+│   ├── Dockerfile
+│   ├── nginx.conf
+│   ├── package.json / vite.config.ts
+│   └── src/
+│       ├── App.tsx, main.tsx, index.css
+│       ├── components/
+│       │   ├── Dashboard.tsx, MyFantasyLeagues.tsx
+│       │   ├── auth/ (LoginForm.tsx, RegisterForm.tsx)
+│       │   └── fantasy/ (CreateTeamModal.tsx, FantasyTeamsList.tsx, PlayerBrowser.tsx, TeamDetailPage.tsx)
+│       ├── contexts/ (AuthContext.tsx)
+│       ├── services/ (api.ts, authService.ts, leagueService.ts)
+│       └── types/ (auth.ts, fantasy.ts)
+├── monitoring/
+│   ├── README.md                   # Prometheus instructions
+│   └── prometheus.yml              # Scrape config
+├── deploy/
+│   └── docker-compose.azure.yml    # App Service compose definition
+├── reports/
+│   └── testing/
+│       ├── backend-coverage.xml
+│       └── coverage-summary.md
+├── .github/workflows/
+│   ├── backend-build-push.yml
+│   └── frontend-build-push.yml
+├── docker-compose.yml              # Multi-container dev/prod parity
+├── REPORT.md
 └── README.md
 
 ```
 
 ## API Documentation
 
-The API documentation is automatically generated and available at http://localhost:5000/docs when running the application.
+Interactive docs live at http://localhost:5000/docs during local runs. When the frontend proxies requests in production, prepend `/api` (e.g., `https://jmfantasyfootball-app.azurewebsites.net/api/health`).
+
+### System & Monitoring
+
+- `GET /` – Root service banner and version
+- `GET /health` – Application + database health probe
+- `GET /metrics` – Prometheus metrics (request count, latency, errors)
 
 ### Authentication Endpoints
 
@@ -220,6 +222,7 @@ The API documentation is automatically generated and available at http://localho
 - `POST /fantasy-teams` - Create fantasy team
 - `GET /fantasy-teams` - Get user's teams
 - `GET /fantasy-teams/{team_id}` - Get team details
+- `GET /fantasy-teams/{team_id}/leagues` - List leagues a team participates in
 - `POST /fantasy-teams/{team_id}/players` - Add player to team
 - `DELETE /fantasy-teams/{team_id}/players/{player_id}` - Remove player
 - `PUT /fantasy-teams/{team_id}/captain` - Set captain
@@ -236,8 +239,10 @@ The API documentation is automatically generated and available at http://localho
 ### Player & Stats Endpoints
 
 - `GET /players` - Get all players
+- `GET /players/search` - Filter players by query, team, or position
 - `GET /players/{player_id}` - Get player details
 - `GET /players/{player_id}/stats` - Get player statistics
+- `GET /teams` - List distinct LaLiga clubs
 - `POST /matchdays/{matchday}/process` - Process matchday stats
 
 ### Transfer Endpoints
@@ -279,31 +284,73 @@ The API documentation is automatically generated and available at http://localho
 - **Forwards**: 1-3 players
 - **Total**: Exactly 11 players
 
-## Testing
+## Local Development
 
-### Running Tests in Docker
+You can run the services individually without Docker for faster iteration.
 
-```bash
-# Run all tests (inside project venv)
-cd backend && ..\.venv\Scripts\python.exe -m pytest
+```powershell
+# Backend
+cd backend
+python -m venv .venv
+. .venv/Scripts/Activate.ps1
+pip install -r requirements.txt
+uvicorn app:app --reload --port 5000
 
-# Run with verbose output
-cd backend && ..\.venv\Scripts\python.exe -m pytest -v
-
-# Run specific test file
-cd backend && ..\.venv\Scripts\python.exe -m pytest tests/test_auth.py
-
-# Run with coverage report
-cd backend && ..\.venv\Scripts\python.exe -m pytest
+# Frontend (new terminal)
+cd frontend
+npm install
+npm run dev -- --host --port 3000
 ```
 
-**Current Test Coverage: 88.46%** (66 tests)
+The frontend expects the API under `/api/*`. When running locally without Nginx, set `VITE_API_BASE=http://localhost:5000` or proxy the dev server.
 
-- Coverage XML artifact: `reports/testing/backend-coverage.xml`
-- Summary notes: `reports/testing/coverage-summary.md`
+## Testing
+
+Automated tests run through `pytest` with coverage gates defined in `backend/pytest.ini`.
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m pytest
+```
+
+- Coverage is enforced at **70% minimum** via `--cov-fail-under=70`.
+- Latest local run: **66 tests, 88.46% line coverage** (see `reports/testing/coverage-summary.md`).
+- The XML report uploaded by CI lives at `reports/testing/backend-coverage.xml`.
 
 ### Test Categories
 
 - **Authentication** (22 tests) - Password hashing, user creation, login
 - **Models** (4 tests) - Database models and relationships
 - **Scoring** (38 tests) - Fantasy points calculation and team validation
+- **Leagues/Transfers/API** - Scenario-level coverage for endpoints and services
+
+## CI/CD Pipeline
+
+GitHub Actions run on every push to `main`:
+
+- `backend-build-push.yml` installs Python deps, runs pytest with coverage, uploads `coverage.xml`, then builds and pushes `jmfantasyfootball.azurecr.io/backend:v7`.
+- `frontend-build-push.yml` installs Node deps, builds the Vite bundle, uploads the `dist` artifact, then builds and pushes `jmfantasyfootball.azurecr.io/frontend:v7`.
+- Both jobs fail immediately if tests break or coverage dips below 70%, ensuring deploys never ship untested code.
+
+Secrets (`ACR_USERNAME`, `ACR_PASSWORD`) gate image publishing and are only available on the `main` branch, satisfying the “deploy from main only” requirement.
+
+## Deployment
+
+Production runs on Azure App Service (Linux, multi-container). Deployment flow:
+
+1. Merge to `main`; CI builds/pushes fresh backend/frontend images tagged `v7` in Azure Container Registry.
+2. `docker-compose.yml` (or the App Service container settings) references those tags.
+3. Restart the web app to pull the new images:
+   ```powershell
+   az webapp restart --resource-group BCSAI2025-DEVOPS-STUDENTS-A --name jmfantasyfootball-app
+   ```
+4. Verify `https://jmfantasyfootball-app.azurewebsites.net` serves the new frontend and `https://jmfantasyfootball-app.azurewebsites.net/api/health` reports `{"status":"healthy"}`.
+
+For local Docker deployments run `docker-compose up --build` which mirrors the production topology (frontend + backend + Postgres + Nginx).
+
+## Health & Monitoring
+
+- **Health check:** `GET /health` verifies the FastAPI process and database connectivity. The App Service configuration maps this endpoint to `/api/health` for the public site.
+- **Metrics:** `GET /metrics` (exposed publicly at `/api/metrics`) emits Prometheus-formatted counters/histograms for request totals, latency, and server errors.
+- **Prometheus setup:** `monitoring/prometheus.yml` scrapes the backend every 15s by default. To point a local Prometheus instance at Azure set the target to `https://jmfantasyfootball-app.azurewebsites.net/api/metrics`.
+- **Verification:** refer to the screenshot in the project issue tracker showing the live `/api/metrics` output from production.
