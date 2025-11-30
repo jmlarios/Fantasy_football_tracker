@@ -10,7 +10,7 @@ services:
       - "5000:5000"
 
   frontend:
-    image: jmfantasyfootball.azurecr.io/frontend:v6
+    image: jmfantasyfootball.azurecr.io/frontend:v7
     restart: always
     depends_on:
       - backend
