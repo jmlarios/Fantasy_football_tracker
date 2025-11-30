@@ -23,7 +23,16 @@ from src.services.league_service import league_service
 from src.services.league_transfer_service import FreeAgentTransferService, UserTransferService
 from src.services.matchday_status_service import MatchdayStatusService
 from src.services.fantasy_team_service import FantasyTeamService
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import (
+    CollectorRegistry,
+    Counter,
+    GCCollector,
+    Histogram,
+    PlatformCollector,
+    ProcessCollector,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+)
 from src.schemas import (
     UserRegister,
     UserLogin,
@@ -55,24 +64,33 @@ from src.schemas import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Dedicated registry prevents duplicate metric registration when the module is imported multiple times.
+METRICS_REGISTRY = CollectorRegistry(auto_describe=True)
+ProcessCollector(registry=METRICS_REGISTRY)
+PlatformCollector(registry=METRICS_REGISTRY)
+GCCollector(registry=METRICS_REGISTRY)
+
 METRICS_EXCLUDED_PATHS = {"/metrics"}
 
 REQUEST_COUNT = Counter(
     "http_requests_total",
     "Total HTTP requests processed",
-    labelnames=("method", "endpoint", "http_status")
+    labelnames=("method", "endpoint", "http_status"),
+    registry=METRICS_REGISTRY,
 )
 
 REQUEST_LATENCY = Histogram(
     "http_request_latency_seconds",
     "Request latency in seconds",
-    labelnames=("method", "endpoint")
+    labelnames=("method", "endpoint"),
+    registry=METRICS_REGISTRY,
 )
 
 REQUEST_ERRORS = Counter(
     "http_request_errors_total",
     "Total HTTP requests resulting in server errors",
-    labelnames=("method", "endpoint")
+    labelnames=("method", "endpoint"),
+    registry=METRICS_REGISTRY,
 )
 
 def get_fantasy_team_service(db: Session = Depends(get_db)) -> FantasyTeamService:
@@ -201,7 +219,7 @@ async def health_check():
 @app.get("/metrics", include_in_schema=False)
 async def metrics_endpoint():
     """Expose Prometheus metrics for scraping."""
-    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    return Response(generate_latest(METRICS_REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
 @app.post("/auth/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
 async def register(request: Request, user_data: UserRegister, db: Session = Depends(get_db)):
